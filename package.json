@@ -10,7 +10,9 @@
     "dev": "npx tsx --watch src/server/index.ts",
     "start": "npx tsx src/server/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "client:dev": "vite",
+    "client:build": "vite build"
   },
   "keywords": [],
   "author": "",
@@ -20,12 +22,15 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@types/ws": "^8.18.1",
+    "canvas": "^3.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
+    "vite": "^8.0.1",
     "vitest": "^4.1.0"
   },
   "dependencies": {
     "express": "^5.2.1",
+    "phaser": "^3.90.0",
     "ws": "^8.20.0"
   }
 }
