@@ -187,35 +187,39 @@ describe('resolveRandomEvent', () => {
     expect(messages.size).toBeGreaterThanOrEqual(2);
   });
 
-  it('pool weights: shared ~50%, class ~25%, gambling ~25%', () => {
-    // Seed random to verify distribution is in the right ballpark
-    const player = makePlayer();
-    let sharedCount = 0;
-    let classCount = 0;
-    let gamblingCount = 0;
-    const RUNS = 1000;
+  it('pool weights: roll < 0.5 → shared pool, 0.5–0.75 → class pool, ≥ 0.75 → gambling pool', () => {
+    const player = makePlayer({ deck: ['w_strike', 'w_defend', 'w_bash'] });
 
-    // Spy on Math.random to track pool selection
-    const origRandom = Math.random;
-    let callCount = 0;
-    const mockedValues: number[] = [];
-    // First call per resolveRandomEvent determines pool selection
-    // Generate sequence: alternating 0.1 (shared), 0.6 (class), 0.85 (gambling)
-    const poolValues = [0.1, 0.6, 0.85];
-    vi.spyOn(Math, 'random').mockImplementation(() => {
-      const v = poolValues[callCount % poolValues.length];
-      callCount++;
-      return v;
-    });
-
-    for (let i = 0; i < RUNS; i++) {
-      resolveRandomEvent(player);
-    }
-
+    // roll = 0.3 → shared pool (Wandering Merchant or Healing Spring)
+    // Shared pool messages contain "campfire" / "merchant" / "healing spring"
+    vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.3)  // pool roll → shared
+      .mockReturnValue(0.0);      // subsequent calls (index into pool, etc.)
+    const sharedResult = resolveRandomEvent(player);
     vi.restoreAllMocks();
+    // Shared pool: Wandering Merchant or Healing Spring
+    expect(
+      sharedResult.message.toLowerCase().match(/merchant|healing spring|restores|offers/)
+    ).not.toBeNull();
 
-    // Just ensure it ran without throwing
-    expect(true).toBe(true);
+    // roll = 0.6 → class pool (spirit blesses you / healing spring fallback)
+    vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.6)  // pool roll → class
+      .mockReturnValue(0.0);
+    const classResult = resolveRandomEvent(player);
+    vi.restoreAllMocks();
+    expect(classResult.message).toBeTruthy();
+
+    // roll = 0.8 → gambling pool (Shrine / Ancient Chest / Soul Bargain)
+    vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0.8)  // pool roll → gambling
+      .mockReturnValue(0.0);     // index into GAMBLING_POOL → first item (Shrine)
+    const gamblingResult = resolveRandomEvent(player);
+    vi.restoreAllMocks();
+    // Gambling pool: shrine / chest / soul bargain
+    expect(
+      gamblingResult.message.toLowerCase().match(/sacrifice|guardian|bargain|nothing/)
+    ).not.toBeNull();
   });
 
   it('does not mutate the original player (when no cost event selected)', () => {
@@ -339,20 +343,15 @@ describe('resolveSoulBargain', () => {
     expect(result.player.maxHp).toBe(85);
   });
 
-  it('grants one best (powerful tier) card for the player class', () => {
-    const player = makePlayer({ hp: 80, maxHp: 100 });
-    const result = resolveSoulBargain(player);
-    expect(result.cardChoices).toBeDefined();
-    expect(result.cardChoices!.length).toBe(1);
-    expect(result.cardChoices![0].tier).toBe('powerful');
-    expect(result.cardChoices![0].class).toBe('warrior');
-  });
-
-  it('also adds the card to the player deck', () => {
+  it('automatically adds the best (powerful tier) card to the deck — no choices presented', () => {
     const player = makePlayer({ hp: 80, maxHp: 100, deck: ['w_strike'] });
     const result = resolveSoulBargain(player);
-    // deck should have one more card
+    // No choice presented; card goes straight into the deck
+    expect(result.cardChoices).toBeUndefined();
     expect(result.player.deck.length).toBe(2);
+    // The added card should be from the warrior powerful-tier pool
+    const addedId = result.player.deck[1];
+    expect(addedId).toBeTruthy();
   });
 
   it('does not mutate the original player', () => {

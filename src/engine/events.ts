@@ -2,6 +2,7 @@ import type { Player } from '@shared/types';
 import type { CardDefinition } from '@shared/cards/types';
 import { CAMPFIRE_HEAL_RANGE, MAX_HP_CAP } from '@shared/constants';
 import { getCardById, getRewardPool } from '@shared/cards';
+import { shuffle } from '@engine/deck';
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -101,7 +102,7 @@ export function resolveWanderingMerchant(player: Player): EventResult {
   const pool = getRewardPool(player.class, 'rare');
 
   // Pick 3 distinct rare cards
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const shuffled = shuffle([...pool]);
   const choices = shuffled.slice(0, 3);
 
   const newHp = Math.max(0, player.hp - HP_COST);
@@ -199,13 +200,11 @@ export function resolveSoulBargain(player: Player): EventResult {
   const bestCard = pool[0]; // getRewardPool('rare') returns powerful tier cards
 
   const newDeck = bestCard ? [...player.deck, bestCard.id] : [...player.deck];
-  const cardChoices = bestCard ? [bestCard] : [];
 
   const cardName = bestCard ? bestCard.name : 'nothing';
 
   return {
     player: { ...player, maxHp: newMaxHp, deck: newDeck },
-    cardChoices,
     message: `You bargain with the soul — max HP reduced by ${MAX_HP_REDUCTION}. You gain "${cardName}".`,
   };
 }
