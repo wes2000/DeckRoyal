@@ -25,6 +25,7 @@ export const MOVEMENT_SPEED = 5;
 // Zone damage constants
 export const ZONE_DAMAGE_PER_SECOND = 5;
 export const SUDDEN_DEATH_DAMAGE_PER_SECOND = 2;
+export const ZONE_WARNING_SECONDS = 30;
 
 // Zone phases
 // 6 phases: 0:full(100%), 5:30(75%), 9:00(50%), 12:00(25%), 15:00(15%), 18:00(5% sudden death)

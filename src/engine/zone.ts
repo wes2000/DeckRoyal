@@ -3,8 +3,7 @@ import {
   ZONE_PHASES,
   ZONE_DAMAGE_PER_SECOND,
   SUDDEN_DEATH_DAMAGE_PER_SECOND,
-  MAP_WIDTH,
-  MAP_HEIGHT,
+  ZONE_WARNING_SECONDS,
 } from '@shared/constants';
 
 /**
@@ -65,6 +64,7 @@ export function isInsideZone(position: Position, boundary: ZoneBoundary): boolea
 /**
  * Returns zone damage per second:
  * - Sudden death (phase 5): SUDDEN_DEATH_DAMAGE_PER_SECOND everywhere
+ *   (isInZone is ignored — all players take damage during sudden death)
  * - Inside zone: 0
  * - Outside zone: ZONE_DAMAGE_PER_SECOND
  */
@@ -104,15 +104,13 @@ export function getNearestSafePosition(position: Position, boundary: ZoneBoundar
 }
 
 /**
- * Returns true if within 30 seconds of the next phase transition.
+ * Returns true if within ZONE_WARNING_SECONDS of the next phase transition.
  */
 export function isZoneWarning(elapsedSeconds: number): boolean {
-  const WARNING_WINDOW = 30;
-
   for (const zp of ZONE_PHASES) {
     if (zp.timeSeconds > elapsedSeconds) {
       // This is an upcoming transition
-      return zp.timeSeconds - elapsedSeconds <= WARNING_WINDOW;
+      return zp.timeSeconds - elapsedSeconds <= ZONE_WARNING_SECONDS;
     }
   }
 
