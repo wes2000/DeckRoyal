@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import {
   STARTING_ENERGY,
   ENERGY_PER_TURN,
@@ -86,16 +87,9 @@ function applyDeckToPlayer(player: Player, deck: DeckState): Player {
 // Combat creation
 // ---------------------------------------------------------------------------
 
-let combatIdCounter = 0;
-
-function generateCombatId(): string {
-  combatIdCounter += 1;
-  return `combat_${combatIdCounter}_${Date.now()}`;
-}
-
 export function createPvECombat(playerId: string, monster: MonsterState): CombatState {
   return {
-    id: generateCombatId(),
+    id: randomUUID(),
     type: 'pve',
     playerIds: [playerId],
     activePlayerIndex: 0,
@@ -121,7 +115,7 @@ export function createPvPCombat(
     : [player2Id, player1Id];
 
   return {
-    id: generateCombatId(),
+    id: randomUUID(),
     type: 'pvp',
     playerIds,
     activePlayerIndex: 0,
@@ -147,6 +141,11 @@ export function getEnergyForTurn(turnNumber: number): number {
 // Start turn
 // ---------------------------------------------------------------------------
 
+/**
+ * Result of starting a turn. Callers MUST pass the returned `energy` and `buffs`
+ * back into `playCard` and `endTurn` for all subsequent calls within the same turn,
+ * as these values represent the authoritative in-turn state (block reset, buffs ticked).
+ */
 export interface StartTurnResult {
   combat: CombatState;
   player: Player;
@@ -194,6 +193,11 @@ export function startTurn(
 // Play card
 // ---------------------------------------------------------------------------
 
+/**
+ * Successful result of playing a card. Callers MUST pass the returned `energy` and
+ * `playerBuffs` (and `targetBuffs` where applicable) back into subsequent `playCard`
+ * or `endTurn` calls for the same turn to preserve accumulated in-turn state.
+ */
 export interface PlayCardSuccess {
   combat: CombatState;
   player: Player;
@@ -341,7 +345,6 @@ export interface EndTurnResult {
 export function endTurn(
   combat: CombatState,
   player: Player,
-  energy: number,
   pvpOpponent?: Player,
   playerBuffs: Record<string, number> = {},
   opponentBuffs: Record<string, number> = {},
@@ -366,7 +369,12 @@ export function endTurn(
     // Monster acts
     const monsterDef = MONSTERS.find(m => m.id === combat.monster!.id);
     if (monsterDef) {
-      const monster = combat.monster;
+      // Reset monster block at the start of its action phase
+      const monsterWithResetBlock = applyCombatantToMonster(
+        combat.monster,
+        resetBlock(monsterToCombatant(combat.monster)),
+      );
+      const monster = monsterWithResetBlock;
       const action = getMonsterIntent(monster, monsterDef);
 
       let updatedMonster = monster;
@@ -439,6 +447,8 @@ export function fleePvE(
   }
 
   const turnCount = combat.turnCounters[player.id] ?? 0;
+  // turnCounter is incremented in startTurn, so after the player's first turn it equals 1.
+  // Guard against <= 1 to block fleeing on turn 1.
   if (turnCount <= 1) {
     return { error: 'Cannot flee on turn 1' };
   }

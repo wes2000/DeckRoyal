@@ -133,7 +133,7 @@ describe('combat engine', () => {
       expect(r1.energy).toBe(2);
 
       // Simulate end turn + second start
-      const endResult = endTurn(r1.combat, r1.player, r1.energy);
+      const endResult = endTurn(r1.combat, r1.player);
       const r2 = startTurn(endResult.combat, endResult.player);
       expect(r2.combat.turnCounters['p1']).toBe(2);
       expect(r2.energy).toBe(3);
@@ -164,8 +164,8 @@ describe('combat engine', () => {
         expect(result.player.hand).toHaveLength(handBefore - 1);
         // Card should be in discard pile
         expect(result.player.discardPile).toContain('w_strike');
-        // Monster took damage
-        expect(result.target.hp).toBeLessThan(30);
+        // Monster took damage: w_strike deals 6 to goblin's 30hp
+        expect(result.target.hp).toBe(24);
       }
     });
 
@@ -206,7 +206,7 @@ describe('combat engine', () => {
       const player = makePlayer({ hand: ['w_strike', 'w_defend'] });
 
       const startResult = startTurn(combat, player);
-      const result = endTurn(startResult.combat, startResult.player, startResult.energy);
+      const result = endTurn(startResult.combat, startResult.player);
 
       // Hand should be empty
       expect(result.player.hand).toHaveLength(0);
@@ -222,7 +222,7 @@ describe('combat engine', () => {
       const player = makePlayer();
 
       const startResult = startTurn(combat, player);
-      const endResult = endTurn(startResult.combat, startResult.player, startResult.energy);
+      const endResult = endTurn(startResult.combat, startResult.player);
 
       // After end turn in PvE, monster should have acted
       // Goblin pattern[0] = attack 6, player has no block from startTurn (block reset)
@@ -246,7 +246,7 @@ describe('combat engine', () => {
 
       // p1 starts and ends turn
       const s1 = startTurn(combat, p1);
-      const e1 = endTurn(s1.combat, s1.player, s1.energy, p2);
+      const e1 = endTurn(s1.combat, s1.player, p2);
 
       // Now p2 should be active
       expect(e1.combat.playerIds[e1.combat.activePlayerIndex]).toBe('p2');
@@ -254,7 +254,7 @@ describe('combat engine', () => {
 
       // p2 starts and ends turn
       const s2 = startTurn(e1.combat, e1.target!);
-      const e2 = endTurn(s2.combat, s2.player, s2.energy, e1.player);
+      const e2 = endTurn(s2.combat, s2.player, e1.player);
 
       // After both players acted, round should increment
       expect(e2.combat.round).toBe(2);
