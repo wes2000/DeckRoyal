@@ -23,6 +23,7 @@ export class LobbyScene extends Phaser.Scene {
   private lobbyCode: string | null = null;
   private myPlayerId: string | null = null;
   private uiElements: Phaser.GameObjects.GameObject[] = [];
+  private domElements: HTMLElement[] = [];
   private lobbyUICreated = false;
 
   constructor() { super('Lobby'); }
@@ -68,50 +69,68 @@ export class LobbyScene extends Phaser.Scene {
       const data = msg.data as { message: string };
       this.showToast(data.message);
     });
+
+    // Clean up DOM elements on scene shutdown
+    this.events.on('shutdown', () => this.clearDomElements());
+  }
+
+  private createDomInput(placeholder: string, maxLength: number, borderColor: string, extraStyles = ''): HTMLInputElement {
+    const canvas = this.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = placeholder;
+    input.maxLength = maxLength;
+    input.style.cssText = `position:absolute;font-size:${Math.round(16 * rect.height / 600)}px;padding:8px;background:#222;color:#fff;border:2px solid ${borderColor};text-align:center;font-family:monospace;z-index:10;${extraStyles}`;
+    document.body.appendChild(input);
+    this.domElements.push(input);
+    return input;
+  }
+
+  private positionDomElement(el: HTMLElement, gameX: number, gameY: number, width: number): void {
+    const canvas = this.game.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = rect.width / 800;
+    const scaleY = rect.height / 600;
+    const pixelX = rect.left + gameX * scaleX;
+    const pixelY = rect.top + gameY * scaleY;
+    el.style.left = `${pixelX - (width * scaleX) / 2}px`;
+    el.style.top = `${pixelY}px`;
+    el.style.width = `${width * scaleX}px`;
   }
 
   private showMainMenu() {
     // Name input
-    const nameLabel = this.add.text(300, 150, 'Your Name:', {
+    const nameLabel = this.add.text(400, 140, 'Your Name:', {
       fontSize: '16px', color: '#ffffff', fontFamily: 'monospace',
-    });
+    }).setOrigin(0.5);
     this.uiElements.push(nameLabel);
 
-    // Use a DOM input element for text entry
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.placeholder = 'Enter name...';
-    nameInput.maxLength = 16;
-    nameInput.style.cssText = 'position:absolute;left:50%;top:200px;transform:translateX(-50%);font-size:16px;padding:8px;width:200px;background:#222;color:#fff;border:2px solid #e8a838;text-align:center;font-family:monospace;';
-    document.body.appendChild(nameInput);
+    const nameInput = this.createDomInput('Enter name...', 16, '#e8a838');
+    this.positionDomElement(nameInput, 400, 165, 200);
 
     // Create Game button
-    const createBtn = this.add.text(400, 280, '[ CREATE GAME ]', {
+    const createBtn = this.add.text(400, 250, '[ CREATE GAME ]', {
       fontSize: '20px', color: '#4ade80', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     createBtn.on('pointerover', () => createBtn.setColor('#86efac'));
     createBtn.on('pointerout', () => createBtn.setColor('#4ade80'));
     createBtn.on('pointerdown', () => {
       const name = nameInput.value.trim() || 'Player';
-      nameInput.remove();
       this.connectAndSend(name, 'new');
     });
     this.uiElements.push(createBtn);
 
     // Join Game section
-    const joinLabel = this.add.text(400, 340, '— or join with code —', {
+    const joinLabel = this.add.text(400, 310, '— or join with code —', {
       fontSize: '14px', color: '#888', fontFamily: 'monospace',
     }).setOrigin(0.5);
     this.uiElements.push(joinLabel);
 
-    const codeInput = document.createElement('input');
-    codeInput.type = 'text';
-    codeInput.placeholder = 'LOBBY CODE';
-    codeInput.maxLength = 6;
-    codeInput.style.cssText = 'position:absolute;left:50%;top:400px;transform:translateX(-50%);font-size:16px;padding:8px;width:150px;background:#222;color:#fff;border:2px solid #60a5fa;text-align:center;font-family:monospace;text-transform:uppercase;';
-    document.body.appendChild(codeInput);
+    const codeInput = this.createDomInput('LOBBY CODE', 6, '#60a5fa', 'text-transform:uppercase;');
+    this.positionDomElement(codeInput, 400, 340, 150);
 
-    const joinBtn = this.add.text(400, 460, '[ JOIN GAME ]', {
+    const joinBtn = this.add.text(400, 410, '[ JOIN GAME ]', {
       fontSize: '20px', color: '#60a5fa', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     joinBtn.on('pointerover', () => joinBtn.setColor('#93c5fd'));
@@ -120,16 +139,14 @@ export class LobbyScene extends Phaser.Scene {
       const name = nameInput.value.trim() || 'Player';
       const code = codeInput.value.trim().toUpperCase();
       if (!code) { this.showToast('Enter a lobby code'); return; }
-      nameInput.remove();
-      codeInput.remove();
       this.connectAndSend(name, code);
     });
     this.uiElements.push(joinBtn);
 
-    // Store DOM elements for cleanup
-    this.events.on('shutdown', () => {
-      nameInput.remove();
-      codeInput.remove();
+    // Reposition on resize
+    this.scale.on('resize', () => {
+      this.positionDomElement(nameInput, 400, 165, 200);
+      this.positionDomElement(codeInput, 400, 340, 150);
     });
   }
 
@@ -139,24 +156,21 @@ export class LobbyScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.uiElements.push(nameLabel);
 
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.placeholder = 'Your name...';
-    nameInput.maxLength = 16;
-    nameInput.style.cssText = 'position:absolute;left:50%;top:270px;transform:translateX(-50%);font-size:16px;padding:8px;width:200px;background:#222;color:#fff;border:2px solid #e8a838;text-align:center;font-family:monospace;';
-    document.body.appendChild(nameInput);
+    const nameInput = this.createDomInput('Your name...', 16, '#e8a838');
+    this.positionDomElement(nameInput, 400, 230, 200);
 
-    const joinBtn = this.add.text(400, 340, '[ JOIN ]', {
+    const joinBtn = this.add.text(400, 310, '[ JOIN ]', {
       fontSize: '20px', color: '#4ade80', fontFamily: 'monospace',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
     joinBtn.on('pointerdown', () => {
       const name = nameInput.value.trim() || 'Player';
-      nameInput.remove();
       this.connectAndSend(name, code.toUpperCase());
     });
     this.uiElements.push(joinBtn);
 
-    this.events.on('shutdown', () => nameInput.remove());
+    this.scale.on('resize', () => {
+      this.positionDomElement(nameInput, 400, 230, 200);
+    });
   }
 
   private async connectAndSend(name: string, gameId: string) {
@@ -169,13 +183,23 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private showLobbyUI() {
-    // Lobby code display
+    // Lobby code display — click to copy
     const codeText = this.add.text(400, 100, `Code: ${this.lobbyCode}`, {
       fontSize: '24px', color: '#e8a838', fontFamily: 'monospace',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    codeText.on('pointerdown', () => {
+      if (this.lobbyCode) {
+        navigator.clipboard.writeText(this.lobbyCode).then(() => {
+          shareText.setText('Copied!');
+          this.time.delayedCall(1500, () => shareText.setText('Click code to copy'));
+        });
+      }
+    });
+    codeText.on('pointerover', () => codeText.setColor('#fcd34d'));
+    codeText.on('pointerout', () => codeText.setColor('#e8a838'));
     this.uiElements.push(codeText);
 
-    const shareText = this.add.text(400, 125, 'Share this code with friends!', {
+    const shareText = this.add.text(400, 125, 'Click code to copy', {
       fontSize: '12px', color: '#888', fontFamily: 'monospace',
     }).setOrigin(0.5);
     this.uiElements.push(shareText);
@@ -266,5 +290,11 @@ export class LobbyScene extends Phaser.Scene {
   private clearUI() {
     this.uiElements.forEach(el => el.destroy());
     this.uiElements = [];
+    this.clearDomElements();
+  }
+
+  private clearDomElements() {
+    this.domElements.forEach(el => el.remove());
+    this.domElements = [];
   }
 }

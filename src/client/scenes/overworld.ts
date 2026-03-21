@@ -6,7 +6,7 @@ import { Toast } from '../ui/toast';
 import { getCardById } from '@shared/cards';
 
 const TILE_SIZE = 16;
-const TILE_MAP: Record<string, number> = { grass: 0, path: 1, rock: 2, water: 3 };
+const TILE_MAP: Record<string, number> = { grass: 1, path: 2, rock: 3, water: 4 };
 const EVENT_FRAME: Record<string, number> = { campfire: 0, blacksmith: 1, small_monster: 2, rare_monster: 3, random: 4 };
 
 export class OverworldScene extends Phaser.Scene {
