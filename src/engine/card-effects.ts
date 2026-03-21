@@ -175,7 +175,10 @@ export function resolveCardEffects(
         break;
       }
       case 'buff': {
-        const buffName = effect.buff ?? ('unknown' as BuffType);
+        if (effect.buff === undefined) {
+          throw new Error(`buff effect on card "${card.id}" is missing the required 'buff' field`);
+        }
+        const buffName = effect.buff;
         const tgt = effect.target ?? 'self';
         if (tgt === 'self') {
           att = applyBuff(att, buffName, effect.value);
@@ -185,7 +188,10 @@ export function resolveCardEffects(
         break;
       }
       case 'debuff': {
-        const buffName = effect.buff ?? ('unknown' as BuffType);
+        if (effect.buff === undefined) {
+          throw new Error(`debuff effect on card "${card.id}" is missing the required 'buff' field`);
+        }
+        const buffName = effect.buff;
         const tgt = effect.target ?? 'enemy';
         if (tgt === 'enemy') {
           def = applyBuff(def, buffName, effect.value);

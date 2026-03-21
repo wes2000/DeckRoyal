@@ -242,6 +242,12 @@ describe('tickBurn', () => {
     const result = tickBurn(target);
     expect(result.hp).toBe(30);
   });
+
+  it('does not reduce HP below 0', () => {
+    const target = makeCombatant({ hp: 2, buffs: { burn: 5 } });
+    const result = tickBurn(target);
+    expect(result.hp).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -403,5 +409,29 @@ describe('resolveCardEffects', () => {
     resolveCardEffects(card, attacker, defender, deck);
     expect(attacker.block).toBe(0);
     expect(defender.hp).toBe(40);
+  });
+
+  it('aoe_damage effect delegates to applyDamage for single-target context', () => {
+    // In the single-target combat context, aoe_damage applies to the defender.
+    // The combat engine (Task 12) is responsible for fanning out to multiple targets.
+    const card = makeCard([{ type: 'aoe_damage', value: 10, target: 'enemy' }]);
+    const attacker = makeCombatant();
+    const defender = makeCombatant({ hp: 30 });
+    const deck = makeDeck();
+    const result = resolveCardEffects(card, attacker, defender, deck);
+    expect(result.defender.hp).toBe(20);
+    expect(result.attacker.hp).toBe(50); // attacker unaffected
+  });
+
+  it('energy effect leaves state unchanged', () => {
+    // Energy management is handled by the combat engine; resolveCardEffects is a no-op for it.
+    const card = makeCard([{ type: 'energy', value: 1 }]);
+    const attacker = makeCombatant({ hp: 40, block: 3, buffs: { strength: 1 } });
+    const defender = makeCombatant({ hp: 25 });
+    const deck = makeDeck();
+    const result = resolveCardEffects(card, attacker, defender, deck);
+    expect(result.attacker).toEqual(attacker);
+    expect(result.defender).toEqual(defender);
+    expect(result.deck).toEqual(deck);
   });
 });
