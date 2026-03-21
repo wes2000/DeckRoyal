@@ -27,6 +27,7 @@ export class OverworldScene extends Phaser.Scene {
   private isSpectating = false;
   private spectatingPlayerId: string | null = null;
   private spectatorUI: Phaser.GameObjects.GameObject[] = [];
+  private connectionOverlay?: Phaser.GameObjects.Container;
 
   constructor() { super('Overworld'); }
 
@@ -44,6 +45,9 @@ export class OverworldScene extends Phaser.Scene {
     this.minimap = new Minimap(this);
 
     this.zoneOverlay = this.add.graphics().setDepth(3);
+
+    wsClient.onStatus('disconnected', () => this.showDisconnectOverlay());
+    wsClient.onStatus('reconnected', () => this.hideDisconnectOverlay());
 
     wsClient.on('zoneWarning', (msg) => {
       this.flashZoneWarning();
@@ -306,6 +310,24 @@ export class OverworldScene extends Phaser.Scene {
     if (sprite) {
       this.cameras.main.startFollow(sprite, true, 0.1, 0.1);
     }
+  }
+
+  private showDisconnectOverlay() {
+    if (this.connectionOverlay) return;
+    this.connectionOverlay = this.add.container(0, 0).setScrollFactor(0).setDepth(1000);
+    const bg = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.7);
+    const text = this.add.text(400, 280, 'Connection Lost', {
+      fontSize: '24px', color: '#ef4444', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    const sub = this.add.text(400, 320, 'Reconnecting...', {
+      fontSize: '14px', color: '#888', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.connectionOverlay.add([bg, text, sub]);
+  }
+
+  private hideDisconnectOverlay() {
+    this.connectionOverlay?.destroy();
+    this.connectionOverlay = undefined;
   }
 
   private handleGameOver(data: any) {

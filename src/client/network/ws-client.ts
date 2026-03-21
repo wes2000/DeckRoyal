@@ -5,6 +5,7 @@ type MessageHandler = (msg: ServerMessage) => void;
 export class WSClient {
   private ws: WebSocket | null = null;
   private handlers: Map<string, MessageHandler[]> = new Map();
+  private statusHandlers: Map<string, (() => void)[]> = new Map();
   private url: string;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
@@ -24,7 +25,7 @@ export class WSClient {
         handlers.forEach(h => h(msg));
         (this.handlers.get('*') || []).forEach(h => h(msg));
       };
-      this.ws.onclose = () => this.attemptReconnect();
+      this.ws.onclose = () => { this.emitStatus('disconnected'); this.attemptReconnect(); };
       this.ws.onerror = () => reject(new Error('WebSocket connection failed'));
     });
   }
@@ -47,10 +48,20 @@ export class WSClient {
     }
   }
 
+  onStatus(event: 'disconnected' | 'reconnecting' | 'reconnected', handler: () => void): void {
+    if (!this.statusHandlers.has(event)) this.statusHandlers.set(event, []);
+    this.statusHandlers.get(event)!.push(handler);
+  }
+
+  private emitStatus(event: string): void {
+    (this.statusHandlers.get(event) || []).forEach(h => h());
+  }
+
   private attemptReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
     this.reconnectAttempts++;
-    setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+    this.emitStatus('reconnecting');
+    setTimeout(() => this.connect().then(() => this.emitStatus('reconnected')).catch(() => {}), 1000 * this.reconnectAttempts);
   }
 
   disconnect(): void {
