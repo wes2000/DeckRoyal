@@ -1,6 +1,270 @@
+import { wsClient } from '../network/ws-client';
+import type { PlayerClass } from '@shared/types';
+
+interface LobbyPlayerData {
+  id: string;
+  name: string;
+  class: PlayerClass | null;
+  isHost: boolean;
+}
+
+interface LobbyStateData {
+  id: string;
+  code: string;
+  hostId: string;
+  started: boolean;
+  players: LobbyPlayerData[];
+}
+
 export class LobbyScene extends Phaser.Scene {
+  private playerListTexts: Phaser.GameObjects.Text[] = [];
+  private selectedClass: PlayerClass | null = null;
+  private isHost = false;
+  private lobbyCode: string | null = null;
+  private myPlayerId: string | null = null;
+  private uiElements: Phaser.GameObjects.GameObject[] = [];
+  private lobbyUICreated = false;
+
   constructor() { super('Lobby'); }
+
   create() {
-    this.add.text(400, 300, 'DECKBRAWL', { fontSize: '32px', color: '#e8a838' }).setOrigin(0.5);
+    // Title
+    this.add.text(400, 40, 'DECKBRAWL', {
+      fontSize: '32px', color: '#e8a838', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+
+    // Check URL for lobby code
+    const pathMatch = window.location.pathname.match(/\/game\/(\w+)/);
+
+    if (pathMatch) {
+      this.showJoinUI(pathMatch[1]);
+    } else {
+      this.showMainMenu();
+    }
+
+    // Listen for server messages
+    wsClient.on('lobbyState', (msg) => {
+      const data = msg.data as LobbyStateData;
+      this.lobbyCode = data.code;
+      // Determine our player ID from first lobbyState received
+      if (!this.myPlayerId && data.players.length > 0) {
+        // We're the most recently added player
+        this.myPlayerId = data.players[data.players.length - 1].id;
+      }
+      this.isHost = data.hostId === this.myPlayerId;
+      if (!this.lobbyUICreated) {
+        this.clearUI();
+        this.showLobbyUI();
+        this.lobbyUICreated = true;
+      }
+      this.updatePlayerList(data);
+    });
+
+    wsClient.on('gameState', () => {
+      this.scene.start('Overworld');
+    });
+
+    wsClient.on('error', (msg) => {
+      const data = msg.data as { message: string };
+      this.showToast(data.message);
+    });
+  }
+
+  private showMainMenu() {
+    // Name input
+    const nameLabel = this.add.text(300, 150, 'Your Name:', {
+      fontSize: '16px', color: '#ffffff', fontFamily: 'monospace',
+    });
+    this.uiElements.push(nameLabel);
+
+    // Use a DOM input element for text entry
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Enter name...';
+    nameInput.maxLength = 16;
+    nameInput.style.cssText = 'position:absolute;left:50%;top:200px;transform:translateX(-50%);font-size:16px;padding:8px;width:200px;background:#222;color:#fff;border:2px solid #e8a838;text-align:center;font-family:monospace;';
+    document.body.appendChild(nameInput);
+
+    // Create Game button
+    const createBtn = this.add.text(400, 280, '[ CREATE GAME ]', {
+      fontSize: '20px', color: '#4ade80', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    createBtn.on('pointerover', () => createBtn.setColor('#86efac'));
+    createBtn.on('pointerout', () => createBtn.setColor('#4ade80'));
+    createBtn.on('pointerdown', () => {
+      const name = nameInput.value.trim() || 'Player';
+      nameInput.remove();
+      this.connectAndSend(name, 'new');
+    });
+    this.uiElements.push(createBtn);
+
+    // Join Game section
+    const joinLabel = this.add.text(400, 340, '— or join with code —', {
+      fontSize: '14px', color: '#888', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.uiElements.push(joinLabel);
+
+    const codeInput = document.createElement('input');
+    codeInput.type = 'text';
+    codeInput.placeholder = 'LOBBY CODE';
+    codeInput.maxLength = 6;
+    codeInput.style.cssText = 'position:absolute;left:50%;top:400px;transform:translateX(-50%);font-size:16px;padding:8px;width:150px;background:#222;color:#fff;border:2px solid #60a5fa;text-align:center;font-family:monospace;text-transform:uppercase;';
+    document.body.appendChild(codeInput);
+
+    const joinBtn = this.add.text(400, 460, '[ JOIN GAME ]', {
+      fontSize: '20px', color: '#60a5fa', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    joinBtn.on('pointerover', () => joinBtn.setColor('#93c5fd'));
+    joinBtn.on('pointerout', () => joinBtn.setColor('#60a5fa'));
+    joinBtn.on('pointerdown', () => {
+      const name = nameInput.value.trim() || 'Player';
+      const code = codeInput.value.trim().toUpperCase();
+      if (!code) { this.showToast('Enter a lobby code'); return; }
+      nameInput.remove();
+      codeInput.remove();
+      this.connectAndSend(name, code);
+    });
+    this.uiElements.push(joinBtn);
+
+    // Store DOM elements for cleanup
+    this.events.on('shutdown', () => {
+      nameInput.remove();
+      codeInput.remove();
+    });
+  }
+
+  private showJoinUI(code: string) {
+    const nameLabel = this.add.text(400, 200, 'Enter your name to join:', {
+      fontSize: '16px', color: '#ffffff', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.uiElements.push(nameLabel);
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Your name...';
+    nameInput.maxLength = 16;
+    nameInput.style.cssText = 'position:absolute;left:50%;top:270px;transform:translateX(-50%);font-size:16px;padding:8px;width:200px;background:#222;color:#fff;border:2px solid #e8a838;text-align:center;font-family:monospace;';
+    document.body.appendChild(nameInput);
+
+    const joinBtn = this.add.text(400, 340, '[ JOIN ]', {
+      fontSize: '20px', color: '#4ade80', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    joinBtn.on('pointerdown', () => {
+      const name = nameInput.value.trim() || 'Player';
+      nameInput.remove();
+      this.connectAndSend(name, code.toUpperCase());
+    });
+    this.uiElements.push(joinBtn);
+
+    this.events.on('shutdown', () => nameInput.remove());
+  }
+
+  private async connectAndSend(name: string, gameId: string) {
+    try {
+      await wsClient.connect();
+      wsClient.send({ type: 'joinLobby', name, gameId });
+    } catch {
+      this.showToast('Failed to connect to server');
+    }
+  }
+
+  private showLobbyUI() {
+    // Lobby code display
+    const codeText = this.add.text(400, 100, `Code: ${this.lobbyCode}`, {
+      fontSize: '24px', color: '#e8a838', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.uiElements.push(codeText);
+
+    const shareText = this.add.text(400, 125, 'Share this code with friends!', {
+      fontSize: '12px', color: '#888', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.uiElements.push(shareText);
+
+    // Class selection
+    const classLabel = this.add.text(400, 170, 'Select Class:', {
+      fontSize: '16px', color: '#ffffff', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.uiElements.push(classLabel);
+
+    const classes: { name: string; class: PlayerClass; color: string }[] = [
+      { name: 'WARRIOR', class: 'warrior', color: '#ef4444' },
+      { name: 'MAGE', class: 'mage', color: '#8b5cf6' },
+      { name: 'ROGUE', class: 'rogue', color: '#22c55e' },
+    ];
+
+    classes.forEach((cls, i) => {
+      const x = 250 + i * 150;
+      const btn = this.add.text(x, 210, `[ ${cls.name} ]`, {
+        fontSize: '16px', color: cls.color, fontFamily: 'monospace',
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      btn.on('pointerdown', () => {
+        this.selectedClass = cls.class;
+        wsClient.send({ type: 'selectClass', class: cls.class });
+      });
+      this.uiElements.push(btn);
+    });
+
+    // Players header
+    const playersHeader = this.add.text(400, 270, 'Players:', {
+      fontSize: '18px', color: '#ffffff', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    this.uiElements.push(playersHeader);
+
+    // Start button (host only)
+    if (this.isHost) {
+      this.addStartButton();
+    }
+  }
+
+  private addStartButton() {
+    const startBtn = this.add.text(400, 550, '[ START GAME ]', {
+      fontSize: '22px', color: '#fbbf24', fontFamily: 'monospace',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    startBtn.setName('startBtn');
+    startBtn.on('pointerover', () => startBtn.setColor('#fcd34d'));
+    startBtn.on('pointerout', () => startBtn.setColor('#fbbf24'));
+    startBtn.on('pointerdown', () => {
+      wsClient.send({ type: 'startGame' });
+    });
+    this.uiElements.push(startBtn);
+  }
+
+  private updatePlayerList(data: LobbyStateData) {
+    // Clear old player texts
+    this.playerListTexts.forEach(t => t.destroy());
+    this.playerListTexts = [];
+
+    data.players.forEach((player, i) => {
+      const classStr = player.class ? ` (${player.class})` : ' (no class)';
+      const hostStr = player.isHost ? ' \u2605' : '';
+      const text = this.add.text(400, 300 + i * 30, `${player.name}${classStr}${hostStr}`, {
+        fontSize: '14px',
+        color: player.class ? '#4ade80' : '#888',
+        fontFamily: 'monospace',
+      }).setOrigin(0.5);
+      this.playerListTexts.push(text);
+    });
+
+    // Show start button for host if not already present
+    if (this.isHost) {
+      const existing = this.children.getByName('startBtn');
+      if (!existing) {
+        this.addStartButton();
+      }
+    }
+  }
+
+  private showToast(message: string) {
+    const toast = this.add.text(400, 560, message, {
+      fontSize: '14px', color: '#ef4444', fontFamily: 'monospace',
+      backgroundColor: '#1a1a1a', padding: { x: 10, y: 5 },
+    }).setOrigin(0.5);
+    this.time.delayedCall(3000, () => toast.destroy());
+  }
+
+  private clearUI() {
+    this.uiElements.forEach(el => el.destroy());
+    this.uiElements = [];
   }
 }
