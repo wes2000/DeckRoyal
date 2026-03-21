@@ -6,11 +6,11 @@ const upgraded = MAGE_CARDS.filter((c) => c.upgraded);
 const upgradeIds = new Set(upgraded.map((c) => c.id));
 
 describe('MAGE_CARDS - basic structure', () => {
-  it('has exactly 16 unique basic cards (non-upgraded)', () => {
+  it('has exactly 9 unique basic cards (non-upgraded)', () => {
     const basicNonUpgraded = nonUpgraded.filter((c) => c.tier === 'basic');
-    expect(basicNonUpgraded).toHaveLength(16);
+    expect(basicNonUpgraded).toHaveLength(9);
     const ids = basicNonUpgraded.map((c) => c.id);
-    expect(new Set(ids).size).toBe(16);
+    expect(new Set(ids).size).toBe(9);
   });
 
   it('has 8 Elementalist archetype cards (non-upgraded)', () => {

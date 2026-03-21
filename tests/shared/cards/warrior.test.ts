@@ -6,29 +6,29 @@ describe('WARRIOR_CARDS', () => {
   const baseCards = WARRIOR_CARDS.filter(c => !c.upgraded);
   const upgradedCards = WARRIOR_CARDS.filter(c => c.upgraded);
 
-  it('has exactly 80 entries (40 base + 40 upgraded)', () => {
-    // 16 basic + 8 berserker + 8 ironclad + 8 warlord = 40 base
-    // each base has an upgraded version = 40 upgraded
-    expect(WARRIOR_CARDS).toHaveLength(80);
+  it('has exactly 66 entries (33 base + 33 upgraded)', () => {
+    // 9 basic + 8 berserker + 8 ironclad + 8 warlord = 33 base
+    // each base has an upgraded version = 33 upgraded
+    expect(WARRIOR_CARDS).toHaveLength(66);
   });
 
-  it('has exactly 16 unique basic cards (not counting upgrades)', () => {
+  it('has exactly 9 unique basic cards (not counting upgrades)', () => {
     const basicCards = baseCards.filter(c => c.tier === 'basic');
-    expect(basicCards).toHaveLength(16);
+    expect(basicCards).toHaveLength(9);
     const ids = basicCards.map(c => c.id);
     const uniqueIds = new Set(ids);
-    expect(uniqueIds.size).toBe(16);
+    expect(uniqueIds.size).toBe(9);
   });
 
-  it('has exactly 40 unique base cards total', () => {
-    expect(baseCards).toHaveLength(40);
+  it('has exactly 33 unique base cards total', () => {
+    expect(baseCards).toHaveLength(33);
     const ids = baseCards.map(c => c.id);
     const uniqueIds = new Set(ids);
-    expect(uniqueIds.size).toBe(40);
+    expect(uniqueIds.size).toBe(33);
   });
 
-  it('has exactly 40 upgraded cards', () => {
-    expect(upgradedCards).toHaveLength(40);
+  it('has exactly 33 upgraded cards', () => {
+    expect(upgradedCards).toHaveLength(33);
   });
 
   it('has 1 Strike definition and 1 Defend definition', () => {
