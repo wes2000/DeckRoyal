@@ -7,6 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
+    "dev": "npx tsx --watch src/server/index.ts",
+    "start": "npx tsx src/server/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -15,12 +17,15 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^25.5.0",
     "@types/ws": "^8.18.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },
   "dependencies": {
+    "express": "^5.2.1",
     "ws": "^8.20.0"
   }
 }
