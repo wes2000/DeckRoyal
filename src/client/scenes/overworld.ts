@@ -1,10 +1,12 @@
 import { wsClient } from '../network/ws-client';
+import { HUD } from '../ui/hud';
 
 const TILE_SIZE = 16;
 const TILE_MAP: Record<string, number> = { grass: 0, path: 1, rock: 2, water: 3 };
 const EVENT_FRAME: Record<string, number> = { campfire: 0, blacksmith: 1, small_monster: 2, rare_monster: 3, random: 4 };
 
 export class OverworldScene extends Phaser.Scene {
+  private hud!: HUD;
   private mapCreated = false;
   private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
   private playerLabels = new Map<string, Phaser.GameObjects.Text>();
@@ -25,6 +27,8 @@ export class OverworldScene extends Phaser.Scene {
       S: this.input.keyboard!.addKey('S'),
       D: this.input.keyboard!.addKey('D'),
     };
+
+    this.hud = new HUD(this);
 
     wsClient.on('gameState', (msg) => this.handleGameState(msg.data));
     wsClient.on('combatState', (msg) => {
@@ -66,6 +70,10 @@ export class OverworldScene extends Phaser.Scene {
 
     this.updatePlayers(data.players);
     this.updateEvents(data.events);
+
+    if (this.myPlayerId) {
+      this.hud.update(data, this.myPlayerId);
+    }
   }
 
   private createTilemap(mapData: any) {
