@@ -310,11 +310,13 @@ export class OverworldScene extends Phaser.Scene {
 
   private handleGameOver(data: any) {
     const isWinner = data.winnerId === this.myPlayerId;
-    const text = isWinner ? 'VICTORY!' : 'GAME OVER';
-    const color = isWinner ? '#4ade80' : '#ef4444';
-    this.add.text(400, 300, text, {
-      fontSize: '40px', color, fontFamily: 'monospace',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+    // Get winner name from player sprites/state
+    this.scene.launch('Victory', {
+      winnerId: data.winnerId,
+      winnerName: data.winnerName ?? 'Unknown',
+      stats: data.stats ?? {},
+      isWinner,
+    });
   }
 
   private showEventUI(data: any) {
