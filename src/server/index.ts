@@ -50,7 +50,7 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(__dirname));
 
   // SPA fallback — let the client router handle non-API routes
-  app.get('*', (req, res) => {
+  app.get('/{*splat}', (req, res) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/ws')) {
       res.sendFile(path.join(__dirname, 'index.html'));
     }
