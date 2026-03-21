@@ -6,7 +6,7 @@ import { Toast } from '../ui/toast';
 import { getCardById } from '@shared/cards';
 
 const TILE_SIZE = 16;
-const TILE_MAP: Record<string, number> = { grass: 1, path: 2, rock: 3, water: 4 };
+const TILE_MAP: Record<string, number> = { grass: 0, path: 1, rock: 2, water: 3 };
 const EVENT_FRAME: Record<string, number> = { campfire: 0, blacksmith: 1, small_monster: 2, rare_monster: 3, random: 4 };
 
 export class OverworldScene extends Phaser.Scene {
@@ -32,6 +32,15 @@ export class OverworldScene extends Phaser.Scene {
   constructor() { super('Overworld'); }
 
   create() {
+    // Reset state for scene restarts
+    this.mapCreated = false;
+    this.playerSprites.clear();
+    this.playerLabels.clear();
+    this.eventSprites.clear();
+    this.isSpectating = false;
+    this.spectatingPlayerId = null;
+    this.spectatorUI = [];
+
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
       W: this.input.keyboard!.addKey('W'),
@@ -49,20 +58,35 @@ export class OverworldScene extends Phaser.Scene {
     wsClient.onStatus('disconnected', () => this.showDisconnectOverlay());
     wsClient.onStatus('reconnected', () => this.hideDisconnectOverlay());
 
-    wsClient.on('zoneWarning', (msg) => {
+    const onZoneWarning = (msg: any) => {
       this.flashZoneWarning();
       this.killFeed.addEntry('Zone shrinking!', '#fbbf24');
-    });
-
-    wsClient.on('gameState', (msg) => this.handleGameState(msg.data));
-    wsClient.on('combatState', (msg) => {
+    };
+    const onGameState = (msg: any) => this.handleGameState(msg.data);
+    const onCombatState = (msg: any) => {
       if (!this.scene.isActive('Combat')) {
         this.scene.launch('Combat', { combatData: msg.data });
       }
+    };
+    const onEliminated = (msg: any) => this.handleElimination(msg.data);
+    const onGameOver = (msg: any) => this.handleGameOver(msg.data);
+    const onEventResult = (msg: any) => this.showEventUI(msg.data);
+
+    wsClient.on('zoneWarning', onZoneWarning);
+    wsClient.on('gameState', onGameState);
+    wsClient.on('combatState', onCombatState);
+    wsClient.on('playerEliminated', onEliminated);
+    wsClient.on('gameOver', onGameOver);
+    wsClient.on('eventResult', onEventResult);
+
+    this.events.on('shutdown', () => {
+      wsClient.off('zoneWarning', onZoneWarning);
+      wsClient.off('gameState', onGameState);
+      wsClient.off('combatState', onCombatState);
+      wsClient.off('playerEliminated', onEliminated);
+      wsClient.off('gameOver', onGameOver);
+      wsClient.off('eventResult', onEventResult);
     });
-    wsClient.on('playerEliminated', (msg) => this.handleElimination(msg.data));
-    wsClient.on('gameOver', (msg) => this.handleGameOver(msg.data));
-    wsClient.on('eventResult', (msg) => this.showEventUI(msg.data));
   }
 
   update(time: number) {

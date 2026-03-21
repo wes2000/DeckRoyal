@@ -43,13 +43,11 @@ export class LobbyScene extends Phaser.Scene {
       this.showMainMenu();
     }
 
-    // Listen for server messages
-    wsClient.on('lobbyState', (msg) => {
+    // Listen for server messages (store refs for cleanup)
+    const onLobbyState = (msg: any) => {
       const data = msg.data as LobbyStateData;
       this.lobbyCode = data.code;
-      // Determine our player ID from first lobbyState received
       if (!this.myPlayerId && data.players.length > 0) {
-        // We're the most recently added player
         this.myPlayerId = data.players[data.players.length - 1].id;
       }
       this.isHost = data.hostId === this.myPlayerId;
@@ -59,19 +57,28 @@ export class LobbyScene extends Phaser.Scene {
         this.lobbyUICreated = true;
       }
       this.updatePlayerList(data);
-    });
+    };
 
-    wsClient.on('gameState', () => {
+    const onGameState = () => {
       this.scene.start('Overworld');
-    });
+    };
 
-    wsClient.on('error', (msg) => {
+    const onError = (msg: any) => {
       const data = msg.data as { message: string };
       this.showToast(data.message);
-    });
+    };
 
-    // Clean up DOM elements on scene shutdown
-    this.events.on('shutdown', () => this.clearDomElements());
+    wsClient.on('lobbyState', onLobbyState);
+    wsClient.on('gameState', onGameState);
+    wsClient.on('error', onError);
+
+    // Clean up ALL handlers on scene shutdown
+    this.events.on('shutdown', () => {
+      wsClient.off('lobbyState', onLobbyState);
+      wsClient.off('gameState', onGameState);
+      wsClient.off('error', onError);
+      this.clearDomElements();
+    });
   }
 
   private createDomInput(placeholder: string, maxLength: number, borderColor: string, extraStyles = ''): HTMLInputElement {
