@@ -5,10 +5,11 @@ A multiplayer deckbuilder battle royale with Pokemon-style overworld exploration
 ## 1. Game Overview
 
 - **Genre:** Deckbuilder battle royale
-- **Players:** 0–8 (solo practice to full lobby)
+- **Players:** 1–8 (solo practice to full lobby)
 - **Game length:** 15–20 minutes
 - **Platform:** Web-based (browser)
 - **Art style:** Pokemon Red/Blue pixel art (16–32px sprites, nearest-neighbor scaling)
+- **Starting HP:** 100 (all classes)
 
 ## 2. System Architecture
 
@@ -54,7 +55,7 @@ All game logic runs on the server. Clients send inputs, server validates and bro
 ### Map Properties
 
 - **Size:** ~60×60 tile grid
-- **Navigation:** WASD movement, tile-based, smooth camera follow centered on the player
+- **Navigation:** WASD movement, tile-based, smooth camera follow centered on the player. Movement speed: 5 tiles per second. Cardinal directions only (no diagonal movement).
 - **Visibility:** Full — all players can see all other players on the map at all times
 - **Terrain:** Grass, paths, rocks/trees (impassable), water (impassable) — simple procedural generation
 
@@ -69,11 +70,26 @@ All game logic runs on the server. Clients send inputs, server validates and bro
 | Random (?) | 6 | Varies |
 | **Total** | **30** | |
 
-Events scale proportionally with player count (e.g., 4 players ≈ 18 events). Events disappear when used by a player — other players can see they're gone.
+Events scale with player count using the formula: `total_events = round(player_count * 3.75)`. Lookup table:
+
+| Players | Events |
+|---------|--------|
+| 1 | 8 |
+| 2 | 11 |
+| 3 | 14 |
+| 4 | 18 |
+| 5 | 21 |
+| 6 | 24 |
+| 7 | 27 |
+| 8 | 30 |
+
+Event type ratios remain proportional to the 8-player distribution, using largest-remainder rounding: calculate each type proportionally, floor all values, then distribute remaining slots one at a time to the types with the largest fractional remainders until the total matches. Events disappear when used by a player — other players can see they're gone.
 
 ### Zone Shrinking
 
 The map shrinks in 4 phases with a visible wall/border. Tiles outside the zone become impassable and deal 5 HP/sec damage. Events outside the zone are destroyed.
+
+**Zone and combat interaction:** Zone damage is paused during combat encounters (both PvP and PvE). However, if the zone shrinks past a combat tile, the fight ends immediately when the current turn completes. Both players (or the player in PvE) are forcibly moved to the nearest safe tile inside the zone. In PvE, the monster escapes (event is consumed with no reward). In PvP, damage dealt so far persists.
 
 | Time | Zone | Map Available |
 |------|------|---------------|
@@ -83,6 +99,7 @@ The map shrinks in 4 phases with a visible wall/border. Tiles outside the zone b
 | 9:00 | Zone 2 | ~50% |
 | 12:00 | Zone 3 | ~25% |
 | 15:00 | Zone 4 (final arena) | ~15% |
+| 18:00 | Zone 5 (sudden death) | ~5% — a tiny arena. All remaining players take 2 HP/sec damage until one player remains. |
 
 ### Player Spawning
 
@@ -90,21 +107,29 @@ Players spawn evenly distributed around the map edges, maximizing initial distan
 
 ## 5. Combat System
 
+### Player Stats
+
+- **Starting HP:** 100 (all classes)
+- **Max HP cap:** 120 (can be increased by events like War Memorial, but cannot exceed 120)
+
 ### Core Mechanics
 
-- **Energy:** Scaling — start at 2 energy on turn 1, gain +1 per turn, no cap. (Turn 1: 2, Turn 2: 3, Turn 3: 4, Turn N: N+1)
+- **Energy:** Scaling — start at 2 energy on turn 1, gain +1 per turn, no cap. (Turn 1: 2, Turn 2: 3, Turn 3: 4, Turn N: N+1). Each player tracks their own independent turn counter for energy calculation. In PvP, both players start at turn 1 and increment independently — so both Player A and Player B get 2 energy on their first turn, 3 on their second, etc. Energy resets to the scaling formula at the start of each new combat encounter — it does not carry between fights.
+- **Turn timer:** Each combat turn has a 30-second time limit. If a player does not end their turn within 30 seconds, the turn auto-ends (no more cards played). This applies to both PvE and PvP.
 - **Draw:** 5 cards per turn from your draw pile
 - **Card types:** Attack (deal damage), Skill (block/buff/utility), Power (persistent effects)
 - **Card costs:** 0–3 energy
-- **Block:** Temporary shield that absorbs damage. Resets to 0 at the start of your next turn.
+- **Block:** Temporary shield that absorbs damage. Resets to 0 at the start of your next turn. In PvP, this means block gained on your turn absorbs damage from the opponent's following turn, then resets before your next turn — same as StS behavior.
 - **Discard:** Remaining hand is discarded at end of turn. When the draw pile is empty, shuffle the discard pile into the draw pile.
 
 ### PvE Combat (Monster Fights)
 
 1. Player walks onto a monster's tile — combat begins.
 2. **Turn sequence:** Draw 5 → gain energy → play cards → end turn → monster acts → repeat.
-3. Fight continues until the monster dies.
-4. Monster behavior follows predefined patterns (attack/defend cycles, buff phases).
+3. Fight continues until the monster dies or the player dies.
+4. **Player death:** If the player reaches 0 HP during a PvE fight, they are eliminated.
+5. **Fleeing:** Players may flee a PvE fight at the start of any turn (before playing cards). Fleeing costs 10 HP as a penalty and returns the player to an adjacent tile. The monster event is consumed with no reward. Fleeing is not available on turn 1.
+6. Monster behavior follows predefined patterns (attack/defend cycles, buff phases).
 
 **Small Monsters:**
 - HP: 30–45
@@ -124,8 +149,11 @@ Players spawn evenly distributed around the map edges, maximizing initial distan
 2. **Turns:** Alternating — the initiator (player who walked in) goes first.
 3. **Rounds:** Fixed 4 rounds. Each round = Player A's turn + Player B's turn.
 4. **Damage cap:** 20 HP max per player per fight. If a player reaches 20 damage taken, the fight ends immediately.
-5. **After combat:** Both players return to the overworld at adjacent tiles. Damage persists.
-6. **Death:** If a player reaches 0 HP during a PvP fight, they are eliminated.
+5. **Round end with no cap reached:** If 4 rounds complete without either player hitting 20 damage, the fight simply ends. There is no winner — both players keep whatever damage they took.
+6. **After combat:** Both players return to the overworld at adjacent tiles. Damage persists. There is a 10-second PvP immunity cooldown after a fight — neither player can initiate PvP with the other during this period. They can still fight other players or monsters.
+7. **Death:** If a player reaches 0 HP during a PvP fight, they are eliminated.
+8. **Simultaneous collision:** If two players walk onto the same tile on the same server tick, the player whose input was processed first is the initiator. If Player C walks onto a tile where a fight is already occurring, they are bounced to an adjacent tile (cannot join or interrupt).
+9. **Simultaneous PvE collision:** If two players walk onto a monster tile on the same tick, the first-processed player enters combat. The second player is bounced to an adjacent tile.
 
 ## 6. Event Alternation Rule
 
@@ -141,7 +169,7 @@ Players must alternate between fight and non-fight events to prevent pure passiv
 
 ### Campfire (Non-Fight)
 
-- **Effect:** Heal 25–30 HP.
+- **Effect:** Heal 25–30 HP (cannot exceed current max HP).
 - **Interaction:** Walk onto tile → healing animation → HP restored.
 - Disappears after use.
 
@@ -149,7 +177,7 @@ Players must alternate between fight and non-fight events to prevent pure passiv
 
 - **Effect:** Upgrade 1 card in your deck.
 - **Interaction:** Walk onto tile → view your deck → pick a card to upgrade.
-- Each card has a predefined upgraded version (e.g., Strike 6 dmg → Strike+ 9 dmg, Fireball 8 dmg → Fireball+ 11 dmg + 2 Burn).
+- Each card has a predefined upgraded version. Upgrade rules follow a systematic pattern: Attack cards gain ~50% more damage, Skill cards gain ~50% more block/effect, Power cards gain enhanced secondary effects. Some cards also gain a secondary effect on upgrade (e.g., Fireball 8 dmg → Fireball+ 11 dmg + 2 Burn). Individual card upgrade definitions will be detailed in the card data files during implementation.
 - Disappears after use.
 
 ### Random (?) Events
@@ -167,12 +195,12 @@ When a player steps on a ? tile, a random event is drawn from three pools:
 **Class-Specific Pool (~25% chance):**
 - **Warrior — War Memorial:** Gain 10 max HP and a random Berserker card.
 - **Mage — Arcane Library:** Pick 2 cards from any of your archetype pools.
-- **Rogue — Black Market:** Steal a random card from another player's class pool.
+- **Rogue — Black Market:** Gain a random card from another player's class card pool (you get a copy — the other player does not lose a card).
 
 **Gambling Pool (~25% chance):**
 - **Cursed Coin Flip:** 50/50 — gain 2 powerful cards OR lose 25 HP.
 - **Mysterious Potion:** Random effect — full heal, upgrade all cards, OR add 3 curse cards to deck.
-- **Double or Nothing:** Fight a rare monster with 2× HP. Win → 2 powerful cards. Lose → lose 30 HP.
+- **Double or Nothing:** Fight a rare monster with 2× HP. Win (kill it) → 2 powerful cards. Flee or die → lose 30 HP (this replaces the standard 10 HP flee cost — the 30 HP penalty includes the cost of fleeing). The flee mechanic from PvE applies.
 - **Soul Bargain:** Permanently lose 15 max HP. Gain the most powerful card from your class.
 
 ## 8. Class Design
@@ -226,8 +254,8 @@ Cards: Vanish, Cloak of Shadows, Shadowstep, Evasion, Blade Dance, Sleight of Ha
 
 ## 9. Card Acquisition
 
-- **Small monster reward:** Pick 1 of 3 cards from your class's basic or low-tier archetype pool.
-- **Rare monster reward:** Pick 1 of 3 cards from your class's powerful archetype pool.
+- **Small monster reward:** Pick 1 of 3 cards drawn from the pool of your class's non-starting basic cards (the 6 basic cards not in your starting deck) and low-tier archetype cards.
+- **Rare monster reward:** Pick 1 of 3 cards from your class's powerful archetype pool (the stronger cards within each archetype set).
 - **Random events:** Varies — may offer card choices, card upgrades, card removal, or card transformation.
 - All card choices are drawn from the player's own class pool. Players naturally specialize into an archetype as they make choices throughout the game.
 
@@ -243,7 +271,7 @@ Cards: Vanish, Cloak of Shadows, Shadowstep, Evasion, Blade Dance, Sleight of Ha
 
 ### Combat UI
 
-- **Top center:** Enemy sprite, HP bar, and intent indicator (shows what the enemy will do next turn, StS-style).
+- **Top center:** Enemy sprite, HP bar, and intent indicator (PvE only — shows what the monster will do next turn, StS-style). In PvP, the opponent's HP, block, and energy are shown instead (no intent — the opponent hasn't chosen yet).
 - **Bottom center:** 5-card hand — cards show cost, name, and effect text. Click to play.
 - **Bottom-left:** Player HP bar, block counter, draw pile count, discard pile count.
 - **Bottom-right:** Energy display (current/max for this turn), End Turn button.
@@ -272,3 +300,19 @@ Cards: Vanish, Cloak of Shadows, Shadowstep, Evasion, Blade Dance, Sleight of Ha
 - **Cards:** Simple styled boxes with clear cost, name, and effect text.
 - **Animations:** Minimal — tile-to-tile movement, attack flashes, heal sparkles.
 - **Rendering:** Low resolution rendered and scaled up with nearest-neighbor interpolation for crisp pixels.
+
+## 12. Solo Practice Mode
+
+When only 1 player starts the game:
+- Map generates with 8 events (per the scaling table).
+- No zone shrinking — the full map remains available.
+- No PvP — the game is purely PvE exploration and deck building.
+- The game ends when all events are consumed or the player dies. A score screen shows stats.
+- The event alternation rule still applies (3 free non-fights, then must fight between each).
+
+## 13. Disconnection Handling
+
+- **During overworld:** A disconnected player's character stands still for 30 seconds. If they reconnect within 30 seconds, they resume. After 30 seconds, they are eliminated (treated as 0 HP).
+- **During combat (PvP):** If a player disconnects mid-PvP, their turns auto-pass (end turn immediately with no cards played) for the remaining rounds. After combat, the disconnected player follows the 30-second overworld rule.
+- **During combat (PvE):** The fight pauses for 15 seconds. If the player does not reconnect, they are eliminated.
+- **Host disconnect:** If the host disconnects, host authority transfers to the next player in the lobby list. The game continues.
