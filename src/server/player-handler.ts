@@ -108,7 +108,7 @@ export function canMove(
   // lastMoveTime === 0 means "never moved"; lastMoveTime === currentTime means "just bootstrapped"
   // (caller initialises to currentTime before first move). Only enforce cooldown when
   // lastMoveTime is strictly less than currentTime (i.e. a real previous move exists).
-  const MOVE_COOLDOWN_MS = 200;
+  const MOVE_COOLDOWN_MS = 120;
   const lastMove =
     lastMoveTime !== undefined ? lastMoveTime : (lastMoveTimes.get(playerId) ?? 0);
   if (lastMove > 0 && lastMove < currentTime && currentTime - lastMove < MOVE_COOLDOWN_MS) {

@@ -25,6 +25,7 @@ import {
   handleFlee,
   startPvECombat,
   startPvPCombat,
+  getSessionEnergy,
 } from './combat-handler.js';
 import {
   handleEventInteraction,
@@ -106,6 +107,10 @@ function broadcastGameState(gameId: string, game: GameState): void {
 
 function sendError(connId: string, message: string): void {
   wsServer.sendTo(connId, { type: 'error', data: { message } });
+}
+
+function combatWithEnergy(combat: any): any {
+  return { ...combat, energy: getSessionEnergy(combat.id) };
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +268,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
           c => !c.isComplete && c.playerIds.includes(playerId)
         );
         if (combat) {
-          wsServer.sendTo(connId, { type: 'combatState', data: combat });
+          wsServer.sendTo(connId, { type: 'combatState', data: combatWithEnergy(combat) });
         }
       } else if (moveResult.triggered === 'pvp') {
         // Find the other player at the same position
@@ -280,7 +285,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
               c => !c.isComplete && c.playerIds.includes(playerId) && c.playerIds.includes(target.id)
             );
             if (combat) {
-              wsServer.broadcast(gameId, { type: 'combatState', data: combat });
+              wsServer.broadcast(gameId, { type: 'combatState', data: combatWithEnergy(combat) });
             }
           }
         }
@@ -318,7 +323,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
       game = handlePlayCard(game, combat.id, playerId, msg.cardId);
       games.set(gameId, game);
 
-      wsServer.broadcast(gameId, { type: 'combatState', data: game.combats[combat.id] });
+      wsServer.broadcast(gameId, { type: 'combatState', data: combatWithEnergy(game.combats[combat.id]) });
       broadcastGameState(gameId, game);
       break;
     }
@@ -342,7 +347,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
       game = handleEndTurn(game, combat.id, playerId);
       games.set(gameId, game);
 
-      wsServer.broadcast(gameId, { type: 'combatState', data: game.combats[combat.id] });
+      wsServer.broadcast(gameId, { type: 'combatState', data: combatWithEnergy(game.combats[combat.id]) });
       broadcastGameState(gameId, game);
       break;
     }
@@ -366,7 +371,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
       game = handleFlee(game, combat.id, playerId);
       games.set(gameId, game);
 
-      wsServer.broadcast(gameId, { type: 'combatState', data: game.combats[combat.id] });
+      wsServer.broadcast(gameId, { type: 'combatState', data: combatWithEnergy(game.combats[combat.id]) });
 
       const winnerId = checkWinCondition(game);
       if (winnerId) {

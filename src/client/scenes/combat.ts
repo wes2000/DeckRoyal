@@ -9,6 +9,7 @@ export class CombatScene extends Phaser.Scene {
   private latestCombatState: any = null;
   private latestPlayerState: any = null;
   private myPlayerId: string | null = null;
+  private currentEnergy = 0;
 
   constructor() { super('Combat'); }
 
@@ -16,6 +17,7 @@ export class CombatScene extends Phaser.Scene {
     // Initial combat data passed from overworld
     if (data?.combatData) {
       this.latestCombatState = data.combatData;
+      this.currentEnergy = data.combatData.energy ?? 0;
     }
 
     this.cardHand = new CardHand(this, (cardId) => {
@@ -28,26 +30,45 @@ export class CombatScene extends Phaser.Scene {
       () => wsClient.send({ type: 'flee' }),
     );
 
-    // Listen for combat updates
-    wsClient.on('combatState', (msg) => this.handleCombatState((msg as any).data));
-    wsClient.on('gameState', (msg) => this.handleGameState((msg as any).data));
-    wsClient.on('cardChoice', (msg) => this.showCardChoice((msg as any).data));
+    // Listen for combat updates (store refs for cleanup)
+    const onCombatState = (msg: any) => this.handleCombatState(msg.data);
+    const onGameState = (msg: any) => this.handleGameState(msg.data);
+    const onCardChoice = (msg: any) => this.showCardChoice(msg.data);
+
+    wsClient.on('combatState', onCombatState);
+    wsClient.on('gameState', onGameState);
+    wsClient.on('cardChoice', onCardChoice);
+
+    this.events.on('shutdown', () => {
+      wsClient.off('combatState', onCombatState);
+      wsClient.off('gameState', onGameState);
+      wsClient.off('cardChoice', onCardChoice);
+    });
+
+    // Render initial state if we have it
+    if (this.latestCombatState) {
+      this.combatUI.update(this.latestCombatState, this.latestPlayerState);
+    }
   }
 
   private handleCombatState(data: any) {
     this.latestCombatState = data;
+    this.currentEnergy = data.energy ?? this.currentEnergy;
 
     if (data.isComplete) {
-      // Combat ended — clean up and return to overworld
       this.cleanupAndStop();
       return;
     }
 
     this.combatUI.update(data, this.latestPlayerState);
+
+    // Re-render cards with updated energy
+    if (this.latestPlayerState?.hand && Array.isArray(this.latestPlayerState.hand)) {
+      this.cardHand.update(this.latestPlayerState.hand, this.currentEnergy);
+    }
   }
 
   private handleGameState(data: any) {
-    // Determine our player ID
     if (!this.myPlayerId) {
       for (const [id, player] of Object.entries(data.players)) {
         if (Array.isArray((player as any).hand)) {
@@ -60,10 +81,8 @@ export class CombatScene extends Phaser.Scene {
     if (this.myPlayerId) {
       this.latestPlayerState = data.players[this.myPlayerId];
 
-      // Update card hand with current hand and a generous energy value
-      // (Energy is managed server-side; server validates plays)
       if (this.latestPlayerState?.hand && Array.isArray(this.latestPlayerState.hand)) {
-        this.cardHand.update(this.latestPlayerState.hand, 99);
+        this.cardHand.update(this.latestPlayerState.hand, this.currentEnergy);
       }
 
       this.combatUI.update(this.latestCombatState, this.latestPlayerState);
@@ -71,11 +90,9 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private showCardChoice(data: any) {
-    // Show card reward selection (after monster defeat)
     const cards = data.cards as string[];
     if (!cards || cards.length === 0) return;
 
-    // Create card choice overlay
     const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.8)
       .setScrollFactor(0).setDepth(70);
 
@@ -83,7 +100,6 @@ export class CombatScene extends Phaser.Scene {
       fontSize: '24px', color: '#e8a838', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(71);
 
-    // Skip button
     const skipBtn = this.add.text(400, 500, '[ SKIP ]', {
       fontSize: '16px', color: '#888', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(71).setInteractive({ useHandCursor: true });
@@ -94,7 +110,6 @@ export class CombatScene extends Phaser.Scene {
 
     skipBtn.on('pointerdown', () => cleanup());
 
-    // Display card options
     cards.forEach((cardId: string, i: number) => {
       const card = getCardById(cardId);
       if (!card) return;

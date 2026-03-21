@@ -21,7 +21,7 @@ export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
   private lastMoveTime = 0;
-  private moveInterval = 200;
+  private moveInterval = 120;
   private zoneOverlay!: Phaser.GameObjects.Graphics;
   private lastZoneBoundary: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
   private isSpectating = false;
@@ -100,6 +100,33 @@ export class OverworldScene extends Phaser.Scene {
     if (direction) {
       wsClient.send({ type: 'move', direction: direction as any });
       this.lastMoveTime = time;
+
+      // Client-side prediction: move sprite immediately
+      const sprite = this.myPlayerId ? this.playerSprites.get(this.myPlayerId) : null;
+      if (sprite) {
+        const dx = direction === 'right' ? TILE_SIZE : direction === 'left' ? -TILE_SIZE : 0;
+        const dy = direction === 'down' ? TILE_SIZE : direction === 'up' ? -TILE_SIZE : 0;
+        const targetX = sprite.x + dx;
+        const targetY = sprite.y + dy;
+        this.tweens.add({
+          targets: sprite,
+          x: targetX,
+          y: targetY,
+          duration: 100,
+          ease: 'Linear',
+        });
+        // Move label too
+        const label = this.playerLabels.get(this.myPlayerId!);
+        if (label) {
+          this.tweens.add({
+            targets: label,
+            x: targetX,
+            y: targetY - 12,
+            duration: 100,
+            ease: 'Linear',
+          });
+        }
+      }
     }
   }
 
@@ -179,8 +206,30 @@ export class OverworldScene extends Phaser.Scene {
         this.playerLabels.set(id, label);
       }
 
-      sprite.setPosition(worldX, worldY);
-      this.playerLabels.get(id)?.setPosition(worldX, worldY - 12);
+      // Tween to new position for smooth movement
+      if (Math.abs(sprite.x - worldX) > TILE_SIZE * 2 || Math.abs(sprite.y - worldY) > TILE_SIZE * 2) {
+        // Large distance = teleport (initial placement or server correction)
+        sprite.setPosition(worldX, worldY);
+        this.playerLabels.get(id)?.setPosition(worldX, worldY - 12);
+      } else if (sprite.x !== worldX || sprite.y !== worldY) {
+        this.tweens.add({
+          targets: sprite,
+          x: worldX,
+          y: worldY,
+          duration: 100,
+          ease: 'Linear',
+        });
+        const lbl = this.playerLabels.get(id);
+        if (lbl) {
+          this.tweens.add({
+            targets: lbl,
+            x: worldX,
+            y: worldY - 12,
+            duration: 100,
+            ease: 'Linear',
+          });
+        }
+      }
 
       if (id === this.myPlayerId) {
         this.cameras.main.startFollow(sprite, true, 0.1, 0.1);
@@ -448,7 +497,7 @@ export class OverworldScene extends Phaser.Scene {
     elements.push(cancelBtn);
   }
 
-  private showCardChoice(cardChoices: string[], message?: string) {
+  private showCardChoice(cardChoices: any[], message?: string) {
     const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.85)
       .setScrollFactor(0).setDepth(80);
 
@@ -459,7 +508,9 @@ export class OverworldScene extends Phaser.Scene {
 
     const elements: Phaser.GameObjects.GameObject[] = [overlay, title];
 
-    cardChoices.forEach((cardId, i) => {
+    cardChoices.forEach((choice, i) => {
+      // Server sends either CardDefinition objects or string IDs
+      const cardId = typeof choice === 'string' ? choice : choice.id;
       const card = getCardById(cardId);
       if (!card) return;
 

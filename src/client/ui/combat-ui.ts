@@ -123,8 +123,8 @@ export class CombatUI {
       this.enemyBlockText.setText('');
     }
 
-    // Energy is tracked server-side in CombatSession — show placeholder
-    this.energyText.setText(`Energy: ?`);
+    // Energy from combatState (augmented by server)
+    this.energyText.setText(`Energy: ${combatState.energy ?? '?'}`);
 
     // Flee button (PvE, after turn 1)
     if (combatState.type === 'pve' && (combatState.turnCounters?.[playerState.id] ?? 0) > 1) {

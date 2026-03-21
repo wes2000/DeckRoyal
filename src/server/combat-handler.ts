@@ -41,6 +41,10 @@ function clearSession(combatId: string): void {
   combatSessions.delete(combatId);
 }
 
+export function getSessionEnergy(combatId: string): number {
+  return combatSessions.get(combatId)?.energy ?? 0;
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -125,17 +129,22 @@ export function startPvECombat(game: GameState, playerId: string, eventId: strin
     e.id === eventId ? { ...e, active: false } : e,
   );
 
-  // Initialise session
-  combatSessions.set(combat.id, {
-    energy: 0,
-    playerBuffs: { [playerId]: {} },
-    turnStarted: false,
+  // Start first turn so player gets cards + energy immediately
+  const player = game.players[playerId];
+  const turnResult = startTurn(combat, player, {});
+
+  // Initialise session with turn already started
+  combatSessions.set(turnResult.combat.id, {
+    energy: turnResult.energy,
+    playerBuffs: { [playerId]: turnResult.buffs },
+    turnStarted: true,
   });
 
   return {
     ...game,
     events: updatedEvents,
-    combats: { ...game.combats, [combat.id]: combat },
+    players: { ...game.players, [playerId]: turnResult.player },
+    combats: { ...game.combats, [turnResult.combat.id]: turnResult.combat },
   };
 }
 
@@ -160,21 +169,24 @@ export function startPvPCombat(game: GameState, initiatorId: string, targetId: s
     pvpCooldowns: { ...target.pvpCooldowns, [initiatorId]: PVP_COOLDOWN_SECONDS },
   };
 
-  // Initialise session
-  combatSessions.set(combat.id, {
-    energy: 0,
-    playerBuffs: { [initiatorId]: {}, [targetId]: {} },
-    turnStarted: false,
+  // Start first turn for initiator so they get cards + energy immediately
+  const turnResult = startTurn(combat, updatedInitiator, {});
+
+  // Initialise session with turn already started
+  combatSessions.set(turnResult.combat.id, {
+    energy: turnResult.energy,
+    playerBuffs: { [initiatorId]: turnResult.buffs, [targetId]: {} },
+    turnStarted: true,
   });
 
   return {
     ...game,
     players: {
       ...game.players,
-      [initiatorId]: updatedInitiator,
+      [initiatorId]: turnResult.player,
       [targetId]: updatedTarget,
     },
-    combats: { ...game.combats, [combat.id]: combat },
+    combats: { ...game.combats, [turnResult.combat.id]: turnResult.combat },
   };
 }
 

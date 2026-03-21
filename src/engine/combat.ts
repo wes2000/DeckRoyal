@@ -99,7 +99,7 @@ export function createPvECombat(playerId: string, monster: MonsterState): Combat
     damageTracker: { [playerId]: 0 },
     damageCap: 0, // no damage cap for PvE
     monster: { ...monster, buffs: { ...monster.buffs } },
-    turnTimer: TURN_TIMER_SECONDS,
+    turnTimer: Date.now() + TURN_TIMER_SECONDS * 1000,
     isComplete: false,
   };
 }
@@ -124,7 +124,7 @@ export function createPvPCombat(
     maxRounds: PVP_MAX_ROUNDS,
     damageTracker: { [player1Id]: 0, [player2Id]: 0 },
     damageCap: PVP_DAMAGE_CAP,
-    turnTimer: TURN_TIMER_SECONDS,
+    turnTimer: Date.now() + TURN_TIMER_SECONDS * 1000,
     isComplete: false,
   };
 }
@@ -165,7 +165,7 @@ export function startTurn(
   const newCombat: CombatState = {
     ...combat,
     turnCounters: { ...combat.turnCounters, [playerId]: newTurnCounter },
-    turnTimer: TURN_TIMER_SECONDS,
+    turnTimer: Date.now() + TURN_TIMER_SECONDS * 1000,
   };
 
   // Reset block via card-effects
