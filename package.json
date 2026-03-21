@@ -16,7 +16,11 @@
   "type": "module",
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
   }
 }
