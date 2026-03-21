@@ -21,6 +21,9 @@ export class OverworldScene extends Phaser.Scene {
   private moveInterval = 200;
   private zoneOverlay!: Phaser.GameObjects.Graphics;
   private lastZoneBoundary: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
+  private isSpectating = false;
+  private spectatingPlayerId: string | null = null;
+  private spectatorUI: Phaser.GameObjects.GameObject[] = [];
 
   constructor() { super('Overworld'); }
 
@@ -54,6 +57,7 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   update(time: number) {
+    if (this.isSpectating) return;
     if (time - this.lastMoveTime < this.moveInterval) return;
     let direction: string | null = null;
     if (this.wasd.W.isDown || this.cursors.up.isDown) direction = 'up';
@@ -83,6 +87,10 @@ export class OverworldScene extends Phaser.Scene {
 
     this.updatePlayers(data.players);
     this.updateEvents(data.events);
+
+    if (this.isSpectating) {
+      this.updateSpectatorButtons();
+    }
 
     if (data.zoneBoundary && data.map) {
       this.updateZoneVisuals(data.zoneBoundary, data.map.width, data.map.height);
@@ -224,9 +232,71 @@ export class OverworldScene extends Phaser.Scene {
     if (label) { label.destroy(); this.playerLabels.delete(playerId); }
 
     if (playerId === this.myPlayerId) {
-      this.add.text(400, 300, 'ELIMINATED', {
-        fontSize: '32px', color: '#ef4444', fontFamily: 'monospace',
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+      this.enterSpectatorMode();
+    }
+  }
+
+  private enterSpectatorMode() {
+    this.isSpectating = true;
+
+    const banner = this.add.text(400, 30, 'SPECTATING', {
+      fontSize: '20px', color: '#ff5555', fontFamily: 'monospace',
+      backgroundColor: '#000000aa', padding: { x: 10, y: 5 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(80);
+    this.spectatorUI.push(banner);
+
+    const hint = this.add.text(400, 570, 'Click a player name to follow', {
+      fontSize: '12px', color: '#888', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(80);
+    this.spectatorUI.push(hint);
+
+    this.updateSpectatorButtons();
+  }
+
+  private updateSpectatorButtons() {
+    // Remove old buttons (index 2 onward) — keep banner (0) and hint (1)
+    while (this.spectatorUI.length > 2) {
+      const btn = this.spectatorUI.pop();
+      if (btn) btn.destroy();
+    }
+
+    const alivePlayers = [...this.playerSprites.keys()];
+
+    // Auto-follow first alive player if none selected or previously-followed player is gone
+    if (alivePlayers.length > 0 && (!this.spectatingPlayerId || !this.playerSprites.has(this.spectatingPlayerId))) {
+      this.followPlayer(alivePlayers[0]);
+    }
+
+    const totalWidth = 800;
+    const btnWidth = alivePlayers.length > 0 ? Math.min(160, totalWidth / alivePlayers.length) : 160;
+    const startX = totalWidth / 2 - ((alivePlayers.length - 1) * btnWidth) / 2;
+
+    alivePlayers.forEach((playerId, i) => {
+      const isFollowed = playerId === this.spectatingPlayerId;
+      const label = this.playerLabels.get(playerId)?.text || playerId;
+      const x = startX + i * btnWidth;
+
+      const btn = this.add.text(x, 545, label, {
+        fontSize: '12px',
+        color: isFollowed ? '#ffffff' : '#aaaaaa',
+        fontFamily: 'monospace',
+        backgroundColor: isFollowed ? '#333333aa' : '#00000088',
+        padding: { x: 6, y: 4 },
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(80).setInteractive({ useHandCursor: true });
+
+      btn.on('pointerdown', () => this.followPlayer(playerId));
+      btn.on('pointerover', () => btn.setColor('#ffffff'));
+      btn.on('pointerout', () => btn.setColor(isFollowed ? '#ffffff' : '#aaaaaa'));
+
+      this.spectatorUI.push(btn);
+    });
+  }
+
+  private followPlayer(playerId: string) {
+    this.spectatingPlayerId = playerId;
+    const sprite = this.playerSprites.get(playerId);
+    if (sprite) {
+      this.cameras.main.startFollow(sprite, true, 0.1, 0.1);
     }
   }
 
