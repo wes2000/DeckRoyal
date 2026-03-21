@@ -1,6 +1,8 @@
 import { wsClient } from '../network/ws-client';
 import { HUD } from '../ui/hud';
+import { KillFeed } from '../ui/kill-feed';
 import { Minimap } from '../ui/minimap';
+import { Toast } from '../ui/toast';
 import { getCardById } from '@shared/cards';
 
 const TILE_SIZE = 16;
@@ -9,6 +11,7 @@ const EVENT_FRAME: Record<string, number> = { campfire: 0, blacksmith: 1, small_
 
 export class OverworldScene extends Phaser.Scene {
   private hud!: HUD;
+  private killFeed!: KillFeed;
   private minimap!: Minimap;
   private mapCreated = false;
   private playerSprites = new Map<string, Phaser.GameObjects.Sprite>();
@@ -37,12 +40,14 @@ export class OverworldScene extends Phaser.Scene {
     };
 
     this.hud = new HUD(this);
+    this.killFeed = new KillFeed(this, 790, 70);
     this.minimap = new Minimap(this);
 
     this.zoneOverlay = this.add.graphics().setDepth(3);
 
     wsClient.on('zoneWarning', (msg) => {
       this.flashZoneWarning();
+      this.killFeed.addEntry('Zone shrinking!', '#fbbf24');
     });
 
     wsClient.on('gameState', (msg) => this.handleGameState(msg.data));
@@ -234,6 +239,9 @@ export class OverworldScene extends Phaser.Scene {
     if (playerId === this.myPlayerId) {
       this.enterSpectatorMode();
     }
+
+    const killerName = data.killedBy ?? 'the zone';
+    this.killFeed.addEntry(`${data.playerName ?? 'Player'} eliminated by ${killerName}`, '#ef4444');
   }
 
   private enterSpectatorMode() {
@@ -313,6 +321,7 @@ export class OverworldScene extends Phaser.Scene {
     switch (data.response) {
       case 'healed':
         this.showToast(data.message || 'Healed!', '#4ade80');
+        this.killFeed.addEntry(data.message || 'Healed!', '#4ade80');
         break;
       case 'upgrade_prompt':
         this.showUpgradePrompt(data.deck);
@@ -330,18 +339,7 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private showToast(message: string, color = '#ffffff') {
-    const toast = this.add.text(400, 500, message, {
-      fontSize: '14px', color, fontFamily: 'monospace',
-      backgroundColor: '#1a1a1a', padding: { x: 12, y: 6 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(80);
-    this.tweens.add({
-      targets: toast,
-      alpha: 0,
-      y: 470,
-      duration: 2500,
-      delay: 1000,
-      onComplete: () => toast.destroy(),
-    });
+    Toast.show(this, message, color);
   }
 
   private showUpgradePrompt(deck: string[]) {
