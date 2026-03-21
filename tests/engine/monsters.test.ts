@@ -153,6 +153,21 @@ describe('getMonsterIntent', () => {
     getMonsterIntent(state, def);
     expect(state.patternIndex).toBe(originalIndex);
   });
+
+  it('throws RangeError when patternIndex is out of bounds', () => {
+    const def = MONSTERS[0];
+    const state = { ...createMonsterState(def), patternIndex: def.pattern.length };
+    expect(() => getMonsterIntent(state, def)).toThrow(RangeError);
+    expect(() => getMonsterIntent(state, def)).toThrow(
+      `patternIndex ${def.pattern.length} is out of bounds for monster "${def.id}"`,
+    );
+  });
+
+  it('throws RangeError when patternIndex is negative', () => {
+    const def = MONSTERS[0];
+    const state = { ...createMonsterState(def), patternIndex: -1 };
+    expect(() => getMonsterIntent(state, def)).toThrow(RangeError);
+  });
 });
 
 describe('advanceMonsterPattern', () => {

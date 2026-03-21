@@ -46,6 +46,20 @@ export interface EventTile {
 
 export interface ZoneBoundary { minX: number; minY: number; maxX: number; maxY: number; }
 
+export interface MonsterAction {
+  type: 'attack' | 'defend' | 'buff';
+  value: number;
+  buff?: string;
+}
+
+export interface MonsterDefinition {
+  id: string;
+  name: string;
+  tier: 'small' | 'rare';
+  hp: { min: number; max: number };
+  pattern: MonsterAction[];
+}
+
 export interface MonsterState {
   id: string;
   name: string;

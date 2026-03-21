@@ -1,18 +1,6 @@
-import type { MonsterState } from '@shared/types';
+import type { MonsterState, MonsterAction, MonsterDefinition } from '@shared/types';
 
-export interface MonsterAction {
-  type: 'attack' | 'defend' | 'buff';
-  value: number;
-  buff?: string;
-}
-
-export interface MonsterDefinition {
-  id: string;
-  name: string;
-  tier: 'small' | 'rare';
-  hp: { min: number; max: number };
-  pattern: MonsterAction[];
-}
+export type { MonsterAction, MonsterDefinition };
 
 export const MONSTERS: MonsterDefinition[] = [
   // --- Small monsters ---
@@ -131,6 +119,12 @@ export function getMonsterIntent(
   monster: MonsterState,
   definition: MonsterDefinition,
 ): MonsterAction {
+  if (monster.patternIndex < 0 || monster.patternIndex >= definition.pattern.length) {
+    throw new RangeError(
+      `patternIndex ${monster.patternIndex} is out of bounds for monster "${definition.id}" ` +
+        `with pattern length ${definition.pattern.length}`,
+    );
+  }
   return definition.pattern[monster.patternIndex];
 }
 
