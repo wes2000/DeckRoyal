@@ -7,7 +7,7 @@ import {
   FLEE_HP_COST,
   TURN_TIMER_SECONDS,
 } from '@shared/constants';
-import { drawCards, discardHand, discardCard, createDeck } from './deck';
+import { drawCards, discardHand, discardCard } from './deck';
 import type { DeckState } from './deck';
 import {
   resolveCardEffects,
@@ -21,14 +21,11 @@ import {
 import type { CombatantState } from './card-effects';
 import { getCardById } from '@shared/cards';
 import { MONSTERS, getMonsterIntent, advanceMonsterPattern } from './monsters';
-import type { CombatState, Player, MonsterState, MonsterDefinition } from '@shared/types';
+import type { CombatState, Player, MonsterState } from '@shared/types';
 
 // ---------------------------------------------------------------------------
 // Type conversion helpers
 // ---------------------------------------------------------------------------
-
-/** Tracks per-player buffs within combat (Player type doesn't have buffs). */
-const combatBuffs = new WeakMap<CombatState, Record<string, Record<string, number>>>();
 
 function playerToCombatant(player: Player, buffs: Record<string, number> = {}): CombatantState {
   return {
