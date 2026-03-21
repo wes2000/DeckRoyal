@@ -18,6 +18,8 @@ export class OverworldScene extends Phaser.Scene {
   private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
   private lastMoveTime = 0;
   private moveInterval = 200;
+  private zoneOverlay!: Phaser.GameObjects.Graphics;
+  private lastZoneBoundary: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
 
   constructor() { super('Overworld'); }
 
@@ -32,6 +34,12 @@ export class OverworldScene extends Phaser.Scene {
 
     this.hud = new HUD(this);
     this.minimap = new Minimap(this);
+
+    this.zoneOverlay = this.add.graphics().setDepth(3);
+
+    wsClient.on('zoneWarning', (msg) => {
+      this.flashZoneWarning();
+    });
 
     wsClient.on('gameState', (msg) => this.handleGameState(msg.data));
     wsClient.on('combatState', (msg) => {
@@ -73,6 +81,10 @@ export class OverworldScene extends Phaser.Scene {
 
     this.updatePlayers(data.players);
     this.updateEvents(data.events);
+
+    if (data.zoneBoundary && data.map) {
+      this.updateZoneVisuals(data.zoneBoundary, data.map.width, data.map.height);
+    }
 
     if (this.myPlayerId) {
       this.hud.update(data, this.myPlayerId);
@@ -164,6 +176,42 @@ export class OverworldScene extends Phaser.Scene {
         this.eventSprites.delete(id);
       }
     }
+  }
+
+  private updateZoneVisuals(zoneBoundary: any, mapWidth: number, mapHeight: number) {
+    const lb = this.lastZoneBoundary;
+    if (lb &&
+        lb.minX === zoneBoundary.minX && lb.minY === zoneBoundary.minY &&
+        lb.maxX === zoneBoundary.maxX && lb.maxY === zoneBoundary.maxY) {
+      return;
+    }
+    this.lastZoneBoundary = { ...zoneBoundary };
+
+    this.zoneOverlay.clear();
+    this.zoneOverlay.fillStyle(0xff0000, 0.25);
+
+    for (let y = 0; y < mapHeight; y++) {
+      for (let x = 0; x < mapWidth; x++) {
+        if (x < zoneBoundary.minX || x > zoneBoundary.maxX ||
+            y < zoneBoundary.minY || y > zoneBoundary.maxY) {
+          this.zoneOverlay.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+      }
+    }
+  }
+
+  private flashZoneWarning() {
+    // Flash screen border red briefly
+    const flash = this.add.rectangle(400, 300, 800, 600, 0xff0000, 0.3)
+      .setScrollFactor(0).setDepth(90);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      duration: 1000,
+      repeat: 2,
+      yoyo: true,
+      onComplete: () => flash.destroy(),
+    });
   }
 
   private handleElimination(data: any) {
