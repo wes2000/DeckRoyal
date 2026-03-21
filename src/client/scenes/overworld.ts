@@ -1,6 +1,7 @@
 import { wsClient } from '../network/ws-client';
 import { HUD } from '../ui/hud';
 import { Minimap } from '../ui/minimap';
+import { getCardById } from '@shared/cards';
 
 const TILE_SIZE = 16;
 const TILE_MAP: Record<string, number> = { grass: 0, path: 1, rock: 2, water: 3 };
@@ -49,6 +50,7 @@ export class OverworldScene extends Phaser.Scene {
     });
     wsClient.on('playerEliminated', (msg) => this.handleElimination(msg.data));
     wsClient.on('gameOver', (msg) => this.handleGameOver(msg.data));
+    wsClient.on('eventResult', (msg) => this.showEventUI(msg.data));
   }
 
   update(time: number) {
@@ -235,5 +237,154 @@ export class OverworldScene extends Phaser.Scene {
     this.add.text(400, 300, text, {
       fontSize: '40px', color, fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
+  }
+
+  private showEventUI(data: any) {
+    switch (data.response) {
+      case 'healed':
+        this.showToast(data.message || 'Healed!', '#4ade80');
+        break;
+      case 'upgrade_prompt':
+        this.showUpgradePrompt(data.deck);
+        break;
+      case 'card_choice':
+        this.showCardChoice(data.cardChoices, data.message);
+        break;
+      case 'random_resolved':
+        this.showToast(data.message || 'Random event!', '#8b5cf6');
+        break;
+      case 'blocked':
+        this.showToast('Must complete a fight first!', '#ef4444');
+        break;
+    }
+  }
+
+  private showToast(message: string, color = '#ffffff') {
+    const toast = this.add.text(400, 500, message, {
+      fontSize: '14px', color, fontFamily: 'monospace',
+      backgroundColor: '#1a1a1a', padding: { x: 12, y: 6 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(80);
+    this.tweens.add({
+      targets: toast,
+      alpha: 0,
+      y: 470,
+      duration: 2500,
+      delay: 1000,
+      onComplete: () => toast.destroy(),
+    });
+  }
+
+  private showUpgradePrompt(deck: string[]) {
+    const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.85)
+      .setScrollFactor(0).setDepth(80);
+
+    const title = this.add.text(400, 40, 'BLACKSMITH - Choose a card to upgrade', {
+      fontSize: '16px', color: '#e8a838', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(81);
+
+    const elements: Phaser.GameObjects.GameObject[] = [overlay, title];
+
+    const uniqueCards = [...new Set(deck)];
+    const cols = 5;
+    const cardW = 120;
+    const cardH = 60;
+    const startX = 400 - ((Math.min(cols, uniqueCards.length) * (cardW + 10)) / 2) + cardW / 2;
+    const startY = 100;
+
+    uniqueCards.forEach((cardId, i) => {
+      const card = getCardById(cardId);
+      if (!card || card.upgraded) return;
+
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = startX + col * (cardW + 10);
+      const y = startY + row * (cardH + 10);
+
+      const bg = this.add.rectangle(x, y, cardW, cardH, 0x333333)
+        .setStrokeStyle(1, 0xe8a838).setScrollFactor(0).setDepth(81)
+        .setInteractive({ useHandCursor: true });
+
+      const nameText = this.add.text(x, y - 10, card.name, {
+        fontSize: '10px', color: '#ffffff', fontFamily: 'monospace',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(82);
+
+      const descText = this.add.text(x, y + 10, `Cost: ${card.cost}`, {
+        fontSize: '8px', color: '#888', fontFamily: 'monospace',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(82);
+
+      elements.push(bg, nameText, descText);
+
+      bg.on('pointerdown', () => {
+        wsClient.send({ type: 'upgradeCard', cardId });
+        elements.forEach(el => el.destroy());
+        this.showToast('Card upgraded!', '#4ade80');
+      });
+
+      bg.on('pointerover', () => bg.setStrokeStyle(2, 0xfbbf24));
+      bg.on('pointerout', () => bg.setStrokeStyle(1, 0xe8a838));
+    });
+
+    const cancelBtn = this.add.text(400, 560, '[ CANCEL ]', {
+      fontSize: '14px', color: '#888', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(81)
+      .setInteractive({ useHandCursor: true });
+    cancelBtn.on('pointerdown', () => elements.forEach(el => el.destroy()));
+    elements.push(cancelBtn);
+  }
+
+  private showCardChoice(cardChoices: string[], message?: string) {
+    const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.85)
+      .setScrollFactor(0).setDepth(80);
+
+    const title = this.add.text(400, 80, message || 'Choose a card to add', {
+      fontSize: '14px', color: '#e8a838', fontFamily: 'monospace',
+      wordWrap: { width: 600 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(81);
+
+    const elements: Phaser.GameObjects.GameObject[] = [overlay, title];
+
+    cardChoices.forEach((cardId, i) => {
+      const card = getCardById(cardId);
+      if (!card) return;
+
+      const x = 200 + i * 200;
+      const y = 280;
+
+      const bg = this.add.rectangle(x, y, 150, 200, 0x444444)
+        .setStrokeStyle(2, 0xe8a838).setScrollFactor(0).setDepth(81)
+        .setInteractive({ useHandCursor: true });
+
+      const costText = this.add.text(x - 60, y - 85, `${card.cost}`, {
+        fontSize: '14px', color: '#fbbf24', fontFamily: 'monospace',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(82);
+
+      const nameText = this.add.text(x, y - 60, card.name, {
+        fontSize: '11px', color: '#ffffff', fontFamily: 'monospace',
+        wordWrap: { width: 130 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(82);
+
+      const descText = this.add.text(x, y - 20, card.description, {
+        fontSize: '8px', color: '#cccccc', fontFamily: 'monospace',
+        wordWrap: { width: 130 },
+      }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(82);
+
+      elements.push(bg, costText, nameText, descText);
+
+      bg.on('pointerdown', () => {
+        wsClient.send({ type: 'selectCard', cardId });
+        elements.forEach(el => el.destroy());
+        this.showToast(`Added ${card.name} to deck`, '#4ade80');
+      });
+
+      bg.on('pointerover', () => bg.setStrokeStyle(2, 0xfbbf24));
+      bg.on('pointerout', () => bg.setStrokeStyle(2, 0xe8a838));
+    });
+
+    const skipBtn = this.add.text(400, 480, '[ SKIP ]', {
+      fontSize: '14px', color: '#888', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(81)
+      .setInteractive({ useHandCursor: true });
+    skipBtn.on('pointerdown', () => elements.forEach(el => el.destroy()));
+    elements.push(skipBtn);
   }
 }
