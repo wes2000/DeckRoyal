@@ -79,9 +79,10 @@ describe('generateMap', () => {
     const queue: [number, number][] = [[startX, startY]];
     visited.add(`${startX},${startY}`);
     const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    let head = 0;
 
-    while (queue.length > 0) {
-      const [cx, cy] = queue.shift()!;
+    while (head < queue.length) {
+      const [cx, cy] = queue[head++];
       for (const [dx, dy] of dirs) {
         const nx = cx + dx;
         const ny = cy + dy;
@@ -243,7 +244,7 @@ describe('placeEvents', () => {
 
 describe('getSpawnPoints', () => {
   it('returns the correct number of spawn points for each player count', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 8);
     for (let n = 1; n <= 8; n++) {
       const spawns = getSpawnPoints(map, n, events);
@@ -252,7 +253,7 @@ describe('getSpawnPoints', () => {
   });
 
   it('spawn points are within map bounds', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 4);
     const spawns = getSpawnPoints(map, 4, events);
     for (const sp of spawns) {
@@ -264,7 +265,7 @@ describe('getSpawnPoints', () => {
   });
 
   it('spawn points land on walkable tiles', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 4);
     const spawns = getSpawnPoints(map, 4, events);
     for (const sp of spawns) {
@@ -273,7 +274,7 @@ describe('getSpawnPoints', () => {
   });
 
   it('spawn points are near map edges (within 10 tiles)', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 8);
     const spawns = getSpawnPoints(map, 8, events);
     const edgeThreshold = 10;
@@ -288,7 +289,7 @@ describe('getSpawnPoints', () => {
   });
 
   it('spawn points are maximally distant: each pair has at least 10-tile Chebyshev distance for 4 players', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 4);
     const spawns = getSpawnPoints(map, 4, events);
     for (let i = 0; i < spawns.length; i++) {
@@ -303,7 +304,7 @@ describe('getSpawnPoints', () => {
   });
 
   it('each spawn has 2-3 events within a 5-tile Manhattan radius', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 4);
     const spawns = getSpawnPoints(map, 4, events);
     for (const sp of spawns) {
@@ -318,7 +319,7 @@ describe('getSpawnPoints', () => {
   });
 
   it('spawn points have unique positions', () => {
-    const map = generateMap(60, 60, 42);
+    const map = generateMap(60, 60, 64);
     const events = placeEvents(map, 8);
     const spawns = getSpawnPoints(map, 8, events);
     const positions = new Set(spawns.map(sp => `${sp.x},${sp.y}`));

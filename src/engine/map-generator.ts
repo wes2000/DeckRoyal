@@ -41,8 +41,9 @@ function floodFill(tiles: Tile[][], width: number, height: number, sx: number, s
   const queue: [number, number][] = [[sx, sy]];
   visited.add(`${sx},${sy}`);
   const dirs = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-  while (queue.length > 0) {
-    const [cx, cy] = queue.shift()!;
+  let head = 0;
+  while (head < queue.length) {
+    const [cx, cy] = queue[head++];
     for (const [dx, dy] of dirs) {
       const nx = cx + dx;
       const ny = cy + dy;
@@ -206,10 +207,24 @@ function tryGenerate(width: number, height: number, rng: () => number): GameMap 
 // ---------------------------------------------------------------------------
 
 export function placeEvents(map: GameMap, playerCount: number): EventTile[] {
-  // Use a deterministic PRNG seeded by map dimensions + playerCount
-  // so repeated calls with the same arguments are idempotent.
-  // (Pure function: no external randomness.)
-  const seed = map.width * 1000 + map.height * 100 + playerCount;
+  // Use a deterministic PRNG seeded by map dimensions, playerCount, and a
+  // sample of tile values so that maps of the same size but different terrain
+  // produce different event layouts. (Pure function: no external randomness.)
+  // Base seed from map dimensions and player count.
+  // XOR a sample of tile type values into the seed (every Nth tile) so that
+  // maps of identical dimensions but different terrain produce different event
+  // layouts.  A simple multiplicative mixing step keeps the hash well-spread
+  // without letting high-index tiles dominate.
+  let seed = map.width * 1000 + map.height * 100 + playerCount;
+  const tileTypeValues: Record<string, number> = { grass: 1, path: 2, rock: 3, water: 4 };
+  const stride = 7;
+  for (let y = 0; y < map.height; y += stride) {
+    for (let x = 0; x < map.width; x += stride) {
+      const v = tileTypeValues[map.tiles[y][x].type] ?? 0;
+      // Mix with a position-dependent multiplier that wraps into 32 bits.
+      seed = (Math.imul(seed ^ v, 0x9e3779b9) + (x * 31 + y)) >>> 0;
+    }
+  }
   const rng = mulberry32(seed);
 
   const distribution = getEventDistributionForPlayers(playerCount);
@@ -333,7 +348,7 @@ export function getSpawnPoints(map: GameMap, playerCount: number, events: EventT
   // Choose playerCount positions that are maximally spread apart AND
   // each has 2-3 events within a 5-tile Manhattan radius.
 
-  // Filter candidates to those that have 2-3 events within radius 5
+  // Annotate candidates with nearby event count
   const NEARBY_RADIUS = 5;
   const qualifying = candidates.filter(c => {
     const nearby = events.filter(ev =>
@@ -342,39 +357,84 @@ export function getSpawnPoints(map: GameMap, playerCount: number, events: EventT
     return nearby.length >= 2 && nearby.length <= 3;
   });
 
-  // Use qualifying if enough, otherwise fall back to all edge candidates
-  const pool = qualifying.length >= playerCount ? qualifying : candidates;
+  // Collect all walkable tiles as ultimate fallback pool
+  const allWalkable: Position[] = [];
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      if (map.tiles[y][x].walkable) allWalkable.push({ x, y });
+    }
+  }
 
-  // Greedy farthest-point selection (maximises minimum pairwise Chebyshev distance)
-  // Start from a corner-ish position
-  const startPos = pool.reduce((best, c) => {
-    const score = c.x + c.y; // prefer bottom-right as initial anchor
-    const bestScore = best.x + best.y;
-    return score < bestScore ? c : best; // actually prefer top-left
-  }, pool[0]);
+  // Select the active pool for greedy farthest-point selection.
+  // Use qualifying edge tiles when there are enough of them (so the event-proximity
+  // constraint is satisfied); otherwise fall back to all edge candidates, then to
+  // all walkable tiles so we always return as many points as possible.
+  const pool: Position[] =
+    qualifying.length >= playerCount ? qualifying :
+    candidates.length > 0            ? candidates :
+    allWalkable;
 
-  const chosen: Position[] = [startPos];
+  // Guard: if pool is empty return empty array
+  if (pool.length === 0) return [];
 
-  while (chosen.length < playerCount) {
-    let bestPos = pool[0];
-    let bestMinDist = -1;
+  // Cap at however many unique positions the pool can provide
+  const limit = Math.min(playerCount, pool.length);
 
-    for (const c of pool) {
-      // Skip already chosen
-      if (chosen.some(s => s.x === c.x && s.y === c.y)) continue;
+  // Helper: run one greedy farthest-point pass from a given start position.
+  function greedyFrom(start: Position): Position[] {
+    const result: Position[] = [start];
+    while (result.length < limit) {
+      let bestPos: Position | null = null;
+      let bestMinDist = -1;
+      for (const c of pool) {
+        if (result.some(s => s.x === c.x && s.y === c.y)) continue;
+        const minDist = Math.min(
+          ...result.map(s => Math.max(Math.abs(c.x - s.x), Math.abs(c.y - s.y))),
+        );
+        if (minDist > bestMinDist) {
+          bestMinDist = minDist;
+          bestPos = c;
+        }
+      }
+      if (bestPos === null) break;
+      result.push(bestPos);
+    }
+    return result;
+  }
 
-      // Min Chebyshev distance to any chosen point
-      const minDist = Math.min(
-        ...chosen.map(s => Math.max(Math.abs(c.x - s.x), Math.abs(c.y - s.y))),
-      );
-
-      if (minDist > bestMinDist) {
-        bestMinDist = minDist;
-        bestPos = c;
+  // Score a candidate set by its minimum pairwise Chebyshev distance.
+  function minPairwiseChebyshev(pts: Position[]): number {
+    let min = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const d = Math.max(Math.abs(pts[i].x - pts[j].x), Math.abs(pts[i].y - pts[j].y));
+        if (d < min) min = d;
       }
     }
+    return min === Infinity ? 0 : min;
+  }
 
-    chosen.push(bestPos);
+  // Try starting from each of the four corner-ish positions in the pool and
+  // pick the resulting set with the best minimum pairwise spread.
+  const cornerSelectors: Array<(p: Position) => number> = [
+    p => p.x + p.y,              // top-left  (min x+y)
+    p => (map.width - p.x) + p.y,           // top-right
+    p => p.x + (map.height - p.y),          // bottom-left
+    p => (map.width - p.x) + (map.height - p.y), // bottom-right
+  ];
+
+  let chosen: Position[] = [];
+  let bestSpread = -1;
+
+  for (const selector of cornerSelectors) {
+    const anchor = pool.reduce((best, c) =>
+      selector(c) < selector(best) ? c : best, pool[0]);
+    const candidate = greedyFrom(anchor);
+    const spread = minPairwiseChebyshev(candidate);
+    if (spread > bestSpread) {
+      bestSpread = spread;
+      chosen = candidate;
+    }
   }
 
   return chosen;
