@@ -9,15 +9,15 @@ export class BootScene extends Phaser.Scene {
     });
 
     // Load tileset
-    this.load.image('tiles', 'src/client/assets/tileset.png');
+    this.load.image('tiles', 'assets/tileset.png');
 
     // Load player spritesheet
-    this.load.spritesheet('player', 'src/client/assets/player.png', {
+    this.load.spritesheet('player', 'assets/player.png', {
       frameWidth: 16, frameHeight: 16,
     });
 
     // Load event sprites
-    this.load.spritesheet('events', 'src/client/assets/events.png', {
+    this.load.spritesheet('events', 'assets/events.png', {
       frameWidth: 16, frameHeight: 16,
     });
   }
