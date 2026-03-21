@@ -8,7 +8,7 @@ export class HPBar {
   private bar: Phaser.GameObjects.Rectangle;
   private text: Phaser.GameObjects.Text;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, width: number, height: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number, width: number, height: number, depth = 50) {
     this.scene = scene;
     this.x = x;
     this.y = y;
@@ -16,12 +16,12 @@ export class HPBar {
     this.height = height;
 
     this.bg = scene.add.rectangle(x, y, width, height, 0x333333)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(50);
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(depth);
     this.bar = scene.add.rectangle(x, y, width, height, 0x4ade80)
-      .setOrigin(0, 0).setScrollFactor(0).setDepth(51);
+      .setOrigin(0, 0).setScrollFactor(0).setDepth(depth + 1);
     this.text = scene.add.text(x + width / 2, y + height / 2, '', {
       fontSize: '10px', color: '#ffffff', fontFamily: 'monospace',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(52);
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 2);
   }
 
   update(current: number, max: number): void {

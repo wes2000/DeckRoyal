@@ -34,7 +34,7 @@ export class CombatUI {
       fontSize: '16px', color: '#ef4444', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(56);
 
-    this.enemyHpBar = new HPBar(scene, 300, 85, 200, 16);
+    this.enemyHpBar = new HPBar(scene, 300, 85, 200, 16, 58);
 
     this.enemyBlockText = scene.add.text(400, 108, '', {
       fontSize: '12px', color: '#60a5fa', fontFamily: 'monospace',
@@ -45,7 +45,7 @@ export class CombatUI {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(56);
 
     // Player area (bottom-left)
-    this.playerHpBar = new HPBar(scene, 10, 430, 150, 14);
+    this.playerHpBar = new HPBar(scene, 10, 430, 150, 14, 58);
 
     this.blockText = scene.add.text(10, 450, '', {
       fontSize: '11px', color: '#60a5fa', fontFamily: 'monospace',
