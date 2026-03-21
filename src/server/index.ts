@@ -44,7 +44,20 @@ const app = express();
 const server = createServer(app);
 
 // Serve static client files
-app.use(express.static(path.join(__dirname, '../../public')));
+if (process.env.NODE_ENV === 'production') {
+  // In production, __dirname is dist/ (where server.js is bundled to).
+  // Vite also builds client files into dist/, so serve from the same dir.
+  app.use(express.static(__dirname));
+
+  // SPA fallback — let the client router handle non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/ws')) {
+      res.sendFile(path.join(__dirname, 'index.html'));
+    }
+  });
+} else {
+  app.use(express.static(path.join(__dirname, '../../public')));
+}
 
 // ---------------------------------------------------------------------------
 // Game state storage
