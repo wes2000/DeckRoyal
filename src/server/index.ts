@@ -37,6 +37,7 @@ import { handleDisconnect as handleDisconnectTimer } from './disconnect-handler.
 import { tick } from './game-loop.js';
 import type { ClientMessage } from './network/messages.js';
 import type { GameState } from '@shared/types';
+import { getRewardPool } from '@shared/cards';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -111,6 +112,29 @@ function sendError(connId: string, message: string): void {
 
 function combatWithEnergy(combat: any): any {
   return { ...combat, energy: getSessionEnergy(combat.id) };
+}
+
+function sendPvERewards(game: GameState, combatBefore: any, combatAfter: any, playerId: string): void {
+  // Only send rewards if combat just completed and monster died
+  if (combatBefore.isComplete || !combatAfter.isComplete) return;
+  if (combatAfter.type !== 'pve') return;
+  if (!combatAfter.monster || combatAfter.monster.hp > 0) return;
+
+  const player = game.players[playerId];
+  if (!player || !player.class) return;
+
+  const tier = (combatAfter.monster.maxHp ?? 0) > 60 ? 'rare' : 'small';
+  const pool = getRewardPool(player.class, tier);
+  if (pool.length === 0) return;
+
+  // Pick 3 random cards
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  const choices = shuffled.slice(0, 3).map(c => c.id);
+
+  const connId = playerIdToConnId.get(playerId);
+  if (connId) {
+    wsServer.sendTo(connId, { type: 'cardChoice', data: { cards: choices } });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +349,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
 
       wsServer.broadcast(gameId, { type: 'combatState', data: combatWithEnergy(game.combats[combat.id]) });
       broadcastGameState(gameId, game);
+      sendPvERewards(game, combat, game.combats[combat.id], playerId);
       break;
     }
 
@@ -349,6 +374,7 @@ function handleMessage(connId: string, msg: ClientMessage): void {
 
       wsServer.broadcast(gameId, { type: 'combatState', data: combatWithEnergy(game.combats[combat.id]) });
       broadcastGameState(gameId, game);
+      sendPvERewards(game, combat, game.combats[combat.id], playerId);
       break;
     }
 
