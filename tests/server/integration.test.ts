@@ -920,22 +920,14 @@ describe('Server Integration: Full Game Flow', () => {
       const combat = findActiveCombat(game, 'p1')!;
       const combatId = combat.id;
 
-      // Cannot flee on turn 0 (no turns taken yet)
+      // Cannot flee on turn 1 (startPvECombat calls startTurn, turnCounter = 1)
       const fleeEarly = handleFlee(game, combatId, 'p1');
-      // Should not have changed (flee fails with turnCount <= 1)
       expect(fleeEarly.combats[combatId].isComplete).toBe(false);
 
-      // Complete turn 1: handleEndTurn auto-starts turn (turnCounter -> 1) then ends it
+      // Complete turn 1: handleEndTurn ends current turn and starts turn 2 (turnCounter -> 2)
       game = handleEndTurn(game, combatId, 'p1');
 
-      // Still can't flee (turnCount = 1, and flee requires > 1)
-      const fleeTurn1 = handleFlee(game, combatId, 'p1');
-      expect(fleeTurn1.combats[combatId].isComplete).toBe(false);
-
-      // Complete turn 2: handleEndTurn auto-starts turn (turnCounter -> 2) then ends it
-      game = handleEndTurn(game, combatId, 'p1');
-
-      // Now flee should work (turnCount = 2)
+      // Now flee should work (turnCount = 2, which is > 1)
       const hpBefore = game.players['p1'].hp;
       game = handleFlee(game, combatId, 'p1');
 

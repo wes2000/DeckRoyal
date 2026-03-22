@@ -5,6 +5,8 @@ export class CardHand {
   private scene: Phaser.Scene;
   private cardContainers: Phaser.GameObjects.Container[] = [];
   private onPlayCard: (cardId: string) => void;
+  private lastHandKey = '';
+  private lastEnergy = -1;
 
   constructor(scene: Phaser.Scene, onPlayCard: (cardId: string) => void) {
     this.scene = scene;
@@ -12,6 +14,12 @@ export class CardHand {
   }
 
   update(hand: string[], energy: number): void {
+    // Only rebuild if hand or energy actually changed
+    const handKey = hand.join(',');
+    if (handKey === this.lastHandKey && energy === this.lastEnergy) return;
+    this.lastHandKey = handKey;
+    this.lastEnergy = energy;
+
     // Destroy old cards
     this.cardContainers.forEach(c => c.destroy());
     this.cardContainers = [];
@@ -21,7 +29,7 @@ export class CardHand {
     const spacing = 10;
     const totalWidth = hand.length * (cardWidth + spacing) - spacing;
     const startX = (800 - totalWidth) / 2 + cardWidth / 2;
-    const y = 520;
+    const baseY = 520;
 
     hand.forEach((cardId, i) => {
       const card = getCardById(cardId);
@@ -29,7 +37,7 @@ export class CardHand {
 
       const x = startX + i * (cardWidth + spacing);
       const playable = energy >= card.cost;
-      const container = this.createCard(x, y, card, playable);
+      const container = this.createCard(x, baseY, card, playable);
       this.cardContainers.push(container);
     });
   }
@@ -37,7 +45,6 @@ export class CardHand {
   private createCard(x: number, y: number, card: CardDefinition, playable: boolean): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y).setScrollFactor(0).setDepth(60);
 
-    // Card background
     const typeColor: Record<string, number> = {
       attack: 0xcc3333, skill: 0x3366cc, power: 0xcc9933,
     };
@@ -45,28 +52,24 @@ export class CardHand {
     const bg = this.scene.add.rectangle(0, 0, 100, 140, bgColor).setStrokeStyle(2, playable ? 0xffffff : 0x555555);
     container.add(bg);
 
-    // Cost (top-left)
     const costBg = this.scene.add.circle(-38, -58, 12, 0x2255aa);
     const costText = this.scene.add.text(-38, -58, `${card.cost}`, {
       fontSize: '14px', color: '#ffffff', fontFamily: 'monospace',
     }).setOrigin(0.5);
     container.add([costBg, costText]);
 
-    // Name
     const nameText = this.scene.add.text(0, -35, card.name, {
       fontSize: '10px', color: '#ffffff', fontFamily: 'monospace',
       wordWrap: { width: 90 },
     }).setOrigin(0.5, 0);
     container.add(nameText);
 
-    // Description
     const descText = this.scene.add.text(0, 0, card.description, {
       fontSize: '8px', color: '#cccccc', fontFamily: 'monospace',
       wordWrap: { width: 88 },
     }).setOrigin(0.5, 0);
     container.add(descText);
 
-    // Upgraded indicator
     if (card.upgraded) {
       const upText = this.scene.add.text(38, -58, '+', {
         fontSize: '12px', color: '#4ade80', fontFamily: 'monospace',
@@ -74,16 +77,22 @@ export class CardHand {
       container.add(upText);
     }
 
-    // Interactive
     if (playable) {
       bg.setInteractive({ useHandCursor: true });
+      let hovered = false;
       bg.on('pointerover', () => {
-        container.setScale(1.1);
-        container.y -= 10;
+        if (!hovered) {
+          hovered = true;
+          container.setScale(1.1);
+          container.y -= 10;
+        }
       });
       bg.on('pointerout', () => {
-        container.setScale(1.0);
-        container.y += 10;
+        if (hovered) {
+          hovered = false;
+          container.setScale(1.0);
+          container.y += 10;
+        }
       });
       bg.on('pointerdown', () => {
         this.onPlayCard(card.id);
@@ -98,5 +107,7 @@ export class CardHand {
   destroy(): void {
     this.cardContainers.forEach(c => c.destroy());
     this.cardContainers = [];
+    this.lastHandKey = '';
+    this.lastEnergy = -1;
   }
 }

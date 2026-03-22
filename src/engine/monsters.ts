@@ -108,6 +108,7 @@ export function createMonsterState(definition: MonsterDefinition): MonsterState 
     block: 0,
     patternIndex: 0,
     buffs: {},
+    intent: definition.pattern[0],
   };
 }
 
@@ -138,7 +139,7 @@ export function advanceMonsterPattern(
   definition: MonsterDefinition,
 ): MonsterState {
   const nextIndex = (monster.patternIndex + 1) % definition.pattern.length;
-  return { ...monster, patternIndex: nextIndex };
+  return { ...monster, patternIndex: nextIndex, intent: definition.pattern[nextIndex] };
 }
 
 /**

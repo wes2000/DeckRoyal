@@ -115,8 +115,17 @@ export class CombatUI {
       this.enemyNameText.setText(monster.name);
       this.enemyHpBar.update(monster.hp, monster.maxHp);
       this.enemyBlockText.setText(monster.block > 0 ? `Block: ${monster.block}` : '');
-      // Intent display would require looking up monster pattern, skip for now
-      this.intentText.setText('');
+      // Show monster intent
+      if (monster.intent) {
+        const intentLabels: Record<string, string> = {
+          attack: `Attacks for ${monster.intent.value}`,
+          defend: `Defends for ${monster.intent.value}`,
+          buff: `Buffs ${monster.intent.buff ?? 'self'} +${monster.intent.value}`,
+        };
+        this.intentText.setText(intentLabels[monster.intent.type] ?? '');
+      } else {
+        this.intentText.setText('');
+      }
     } else if (combatState.type === 'pvp') {
       this.enemyNameText.setText('PvP Combat');
       this.intentText.setText('');

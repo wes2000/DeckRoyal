@@ -23,6 +23,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    // Set pixel-art filtering on sprite textures (NEAREST neighbor)
+    ['tiles', 'player', 'events'].forEach(key => {
+      this.textures.get(key).setFilter(Phaser.Textures.FilterMode.NEAREST);
+    });
+
     // Create player walk animations
     const directions = ['down', 'up', 'left', 'right'];
     directions.forEach((dir, i) => {

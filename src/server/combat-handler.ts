@@ -344,9 +344,6 @@ export function handleEndTurn(
   const playerBuffs = session.playerBuffs[playerId] ?? {};
   const endResult = endTurn(currentCombat, currentPlayer, pvpOpponent, playerBuffs, opponentBuffs);
 
-  // Reset session for next turn
-  session.turnStarted = false;
-  session.energy = 0;
   session.playerBuffs[playerId] = endResult.playerBuffs ?? {};
 
   let updatedGame: GameState = {
@@ -365,7 +362,33 @@ export function handleEndTurn(
     };
   }
 
-  return postActionCleanup(updatedGame, combatId, combat.isComplete);
+  // Run cleanup first to check if combat ended
+  updatedGame = postActionCleanup(updatedGame, combatId, combat.isComplete);
+
+  // If combat is still active, start the next turn immediately so the
+  // player receives cards + energy in the broadcast
+  const updatedCombat = updatedGame.combats[combatId];
+  if (updatedCombat && !updatedCombat.isComplete) {
+    const nextPlayerId = updatedCombat.playerIds[updatedCombat.activePlayerIndex];
+    const nextPlayer = updatedGame.players[nextPlayerId];
+    if (nextPlayer) {
+      const nextBuffs = session.playerBuffs[nextPlayerId] ?? {};
+      const turnResult = startTurn(updatedCombat, nextPlayer, nextBuffs);
+      session.energy = turnResult.energy;
+      session.playerBuffs[nextPlayerId] = turnResult.buffs;
+      session.turnStarted = true;
+      updatedGame = {
+        ...updatedGame,
+        players: { ...updatedGame.players, [nextPlayerId]: turnResult.player },
+        combats: { ...updatedGame.combats, [combatId]: turnResult.combat },
+      };
+    }
+  } else {
+    session.turnStarted = false;
+    session.energy = 0;
+  }
+
+  return updatedGame;
 }
 
 // ---------------------------------------------------------------------------

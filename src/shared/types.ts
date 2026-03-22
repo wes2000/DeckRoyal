@@ -68,6 +68,7 @@ export interface MonsterState {
   block: number;
   patternIndex: number;
   buffs: Record<string, number>;
+  intent?: MonsterAction;
 }
 
 export interface CombatState {
