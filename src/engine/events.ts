@@ -226,12 +226,13 @@ function resolveClassEvent(player: Player): EventResult {
   if (pool.length === 0) {
     return resolveHealingSpring(player);
   }
-  const card = pool[Math.floor(Math.random() * pool.length)];
-  const newDeck = [...player.deck, card.id];
+  // Offer 3 distinct cards to choose from (don't auto-add)
+  const shuffled = shuffle([...pool]);
+  const choices = shuffled.slice(0, 3);
   return {
-    player: { ...player, deck: newDeck },
-    cardChoices: [card],
-    message: `A ${player.class} spirit blesses you with "${card.name}".`,
+    player,
+    cardChoices: choices,
+    message: `A ${player.class} spirit offers you a blessing. Choose wisely.`,
   };
 }
 

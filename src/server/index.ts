@@ -38,6 +38,7 @@ import { tick } from './game-loop.js';
 import type { ClientMessage } from './network/messages.js';
 import type { GameState } from '@shared/types';
 import { getRewardPool } from '@shared/cards';
+import { createBotPlayer, tickBot, getBotId } from './bot.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -233,7 +234,24 @@ function handleMessage(connId: string, msg: ClientMessage): void {
 
       // Initialize and start the game
       const initialGame = initializeGame(lobby);
-      const game = startGame(initialGame);
+
+      // Solo mode: add a bot player
+      let gameWithBot = initialGame;
+      if (lobby.players.size === 1) {
+        const humanPlayer = Object.values(initialGame.players)[0];
+        // Spawn bot at an offset from the human player
+        const botSpawn = {
+          x: Math.min(humanPlayer.position.x + 5, initialGame.map.width - 1),
+          y: Math.min(humanPlayer.position.y + 5, initialGame.map.height - 1),
+        };
+        const bot = createBotPlayer(botSpawn);
+        gameWithBot = {
+          ...initialGame,
+          players: { ...initialGame.players, [bot.id]: bot },
+        };
+      }
+
+      const game = startGame(gameWithBot);
       games.set(game.id, game);
 
       // Associate all lobby players with this game
@@ -513,15 +531,23 @@ function handleDisconnect(connId: string): void {
 // ---------------------------------------------------------------------------
 
 setInterval(() => {
+  const now = Date.now();
   for (const [gameId, game] of games) {
     if (game.phase !== 'playing') continue;
-    const result = tick(game, 0.1, Date.now());
-    games.set(gameId, result.game);
+    const result = tick(game, 0.1, now);
+    let updatedGame = result.game;
+
+    // Tick bot AI if a bot exists in this game
+    if (updatedGame.players[getBotId()]) {
+      updatedGame = tickBot(updatedGame, now);
+    }
+
+    games.set(gameId, updatedGame);
     for (const event of result.events) {
       wsServer.broadcast(gameId, event);
     }
     // Broadcast updated game state after tick
-    broadcastGameState(gameId, result.game);
+    broadcastGameState(gameId, updatedGame);
   }
 }, 100);
 

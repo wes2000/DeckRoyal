@@ -3,6 +3,7 @@ import {
   STARTING_ENERGY,
   ENERGY_PER_TURN,
   CARDS_PER_DRAW,
+  MAX_HAND_SIZE,
   PVP_DAMAGE_CAP,
   PVP_MAX_ROUNDS,
   FLEE_HP_COST,
@@ -175,7 +176,7 @@ export function startTurn(
 
   // Draw cards
   const deck = playerToDeck(updatedPlayer);
-  const newDeck = drawCards(deck, CARDS_PER_DRAW);
+  const newDeck = drawCards(deck, CARDS_PER_DRAW, MAX_HAND_SIZE);
   updatedPlayer = applyDeckToPlayer(updatedPlayer, newDeck);
 
   // Calculate energy
@@ -490,14 +491,30 @@ export function checkCombatEnd(
   // Check if any player is dead
   for (const player of players) {
     if (combat.playerIds.includes(player.id) && (!player.isAlive || player.hp <= 0)) {
-      return { ...combat, isComplete: true };
+      // PvP: allow the other player to finish their turn for parity
+      if (combat.type === 'pvp') {
+        const turnCounts = combat.playerIds.map(pid => combat.turnCounters[pid] ?? 0);
+        const allEqual = turnCounts.every(t => t === turnCounts[0]);
+        if (allEqual) {
+          return { ...combat, isComplete: true };
+        }
+        // Not equal turns — let the behind player finish before ending
+      } else {
+        return { ...combat, isComplete: true };
+      }
     }
   }
 
-  // PvP: check damage cap
+  // PvP: check damage cap (with turn parity — both players get equal turns)
   if (combat.type === 'pvp' && combat.damageCap > 0) {
-    for (const playerId of combat.playerIds) {
-      if ((combat.damageTracker[playerId] ?? 0) >= combat.damageCap) {
+    const capReached = combat.playerIds.some(
+      pid => (combat.damageTracker[pid] ?? 0) >= combat.damageCap,
+    );
+    if (capReached) {
+      // Ensure both players have had equal turns before ending
+      const turnCounts = combat.playerIds.map(pid => combat.turnCounters[pid] ?? 0);
+      const allEqual = turnCounts.every(t => t === turnCounts[0]);
+      if (allEqual) {
         return { ...combat, isComplete: true };
       }
     }

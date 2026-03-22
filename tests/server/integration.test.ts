@@ -680,9 +680,15 @@ describe('Server Integration: Full Game Flow', () => {
         },
       };
 
-      // End turn to trigger combat end check
+      // End turn for both players to trigger combat end check (turn parity)
       const activePlayerId = game.combats[combatId].playerIds[game.combats[combatId].activePlayerIndex];
       game = handleEndTurn(game, combatId, activePlayerId);
+
+      // If not yet complete, the other player needs their matching turn
+      if (!game.combats[combatId].isComplete) {
+        const nextPlayerId = game.combats[combatId].playerIds[game.combats[combatId].activePlayerIndex];
+        game = handleEndTurn(game, combatId, nextPlayerId);
+      }
 
       expect(game.combats[combatId].isComplete).toBe(true);
     });

@@ -10,6 +10,8 @@ export class CombatScene extends Phaser.Scene {
   private latestPlayerState: any = null;
   private myPlayerId: string | null = null;
   private currentEnergy = 0;
+  private pendingReward = false;
+  private victoryElements: Phaser.GameObjects.GameObject[] = [];
 
   constructor() { super('Combat'); }
 
@@ -56,6 +58,17 @@ export class CombatScene extends Phaser.Scene {
     this.currentEnergy = data.energy ?? this.currentEnergy;
 
     if (data.isComplete) {
+      // PvE victory: wait for reward cardChoice before closing
+      if (data.type === 'pve' && data.monster && data.monster.hp <= 0) {
+        this.pendingReward = true;
+        this.cardHand.destroy();
+        this.showVictoryBanner();
+        // Safety timeout: if no reward arrives in 3s, close anyway
+        this.time.delayedCall(3000, () => {
+          if (this.pendingReward) this.cleanupAndStop();
+        });
+        return;
+      }
       this.cleanupAndStop();
       return;
     }
@@ -89,14 +102,28 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
+  private showVictoryBanner(): void {
+    const banner = this.add.text(400, 250, 'VICTORY!', {
+      fontSize: '32px', color: '#4ade80', fontFamily: 'monospace',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(70);
+    this.victoryElements.push(banner);
+  }
+
   private showCardChoice(data: any) {
     const cards = data.cards as string[];
-    if (!cards || cards.length === 0) return;
+    if (!cards || cards.length === 0) {
+      if (this.pendingReward) this.cleanupAndStop();
+      return;
+    }
+
+    // Clear victory banner
+    this.victoryElements.forEach(el => el.destroy());
+    this.victoryElements = [];
 
     const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.8)
       .setScrollFactor(0).setDepth(70);
 
-    const title = this.add.text(400, 100, 'Choose a Card', {
+    const title = this.add.text(400, 100, 'Choose a Reward Card', {
       fontSize: '24px', color: '#e8a838', fontFamily: 'monospace',
     }).setOrigin(0.5).setScrollFactor(0).setDepth(71);
 
@@ -106,7 +133,10 @@ export class CombatScene extends Phaser.Scene {
 
     const choiceElements: Phaser.GameObjects.GameObject[] = [overlay, title, skipBtn];
 
-    const cleanup = () => choiceElements.forEach(el => el.destroy());
+    const cleanup = () => {
+      choiceElements.forEach(el => el.destroy());
+      if (this.pendingReward) this.cleanupAndStop();
+    };
 
     skipBtn.on('pointerdown', () => cleanup());
 
@@ -144,6 +174,9 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private cleanupAndStop() {
+    this.pendingReward = false;
+    this.victoryElements.forEach(el => el.destroy());
+    this.victoryElements = [];
     this.cardHand.destroy();
     this.combatUI.destroy();
     this.scene.stop('Combat');

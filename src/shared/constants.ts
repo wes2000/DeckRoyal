@@ -6,6 +6,7 @@ export const MAX_HP_CAP = 120;
 export const STARTING_ENERGY = 2;
 export const ENERGY_PER_TURN = 1;
 export const CARDS_PER_DRAW = 5;
+export const MAX_HAND_SIZE = 5;
 export const TURN_TIMER_SECONDS = 30;
 
 // PvP constants

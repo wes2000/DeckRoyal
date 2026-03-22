@@ -14,91 +14,151 @@ export class CardHand {
   }
 
   update(hand: string[], energy: number): void {
-    // Only rebuild if hand or energy actually changed
     const handKey = hand.join(',');
     if (handKey === this.lastHandKey && energy === this.lastEnergy) return;
     this.lastHandKey = handKey;
     this.lastEnergy = energy;
 
-    // Destroy old cards
     this.cardContainers.forEach(c => c.destroy());
     this.cardContainers = [];
 
-    const cardWidth = 100;
-    const cardHeight = 140;
-    const spacing = 10;
-    const totalWidth = hand.length * (cardWidth + spacing) - spacing;
-    const startX = (800 - totalWidth) / 2 + cardWidth / 2;
-    const baseY = 520;
+    const cardWidth = 105;
+    const cardHeight = 145;
+    const numCards = hand.length;
+
+    // Fan layout parameters
+    const centerX = 400;
+    const baseY = 555;
+    const maxSpread = 380; // total width of fan
+    const arcHeight = 25; // how much the arc curves
+    const maxAngle = 3; // max rotation in degrees per card from center
 
     hand.forEach((cardId, i) => {
       const card = getCardById(cardId);
       if (!card) return;
 
-      const x = startX + i * (cardWidth + spacing);
+      // Compute fan position
+      const t = numCards <= 1 ? 0 : (i / (numCards - 1)) * 2 - 1; // -1 to 1
+      const x = centerX + t * (maxSpread / 2);
+      const y = baseY + Math.abs(t) * arcHeight; // arc up at edges
+      const angle = t * maxAngle;
+
       const playable = energy >= card.cost;
-      const container = this.createCard(x, baseY, card, playable);
+      const container = this.createCard(x, y, angle, card, playable, cardWidth, cardHeight);
       this.cardContainers.push(container);
     });
   }
 
-  private createCard(x: number, y: number, card: CardDefinition, playable: boolean): Phaser.GameObjects.Container {
-    const container = this.scene.add.container(x, y).setScrollFactor(0).setDepth(60);
+  private createCard(
+    x: number, y: number, angle: number,
+    card: CardDefinition, playable: boolean,
+    w: number, h: number,
+  ): Phaser.GameObjects.Container {
+    const container = this.scene.add.container(x, y)
+      .setScrollFactor(0).setDepth(60).setAngle(angle);
 
-    const typeColor: Record<string, number> = {
-      attack: 0xcc3333, skill: 0x3366cc, power: 0xcc9933,
+    // Card type colors
+    const typeColors: Record<string, { bg: number; border: number; label: string }> = {
+      attack: { bg: 0x8b2020, border: 0xcc4444, label: 'Attack' },
+      skill:  { bg: 0x1a4480, border: 0x4488cc, label: 'Skill' },
+      power:  { bg: 0x806020, border: 0xccaa44, label: 'Power' },
     };
-    const bgColor = playable ? (typeColor[card.type] ?? 0x444444) : 0x333333;
-    const bg = this.scene.add.rectangle(0, 0, 100, 140, bgColor).setStrokeStyle(2, playable ? 0xffffff : 0x555555);
-    container.add(bg);
+    const colors = typeColors[card.type] ?? { bg: 0x444444, border: 0x666666, label: '' };
 
-    const costBg = this.scene.add.circle(-38, -58, 12, 0x2255aa);
-    const costText = this.scene.add.text(-38, -58, `${card.cost}`, {
-      fontSize: '14px', color: '#ffffff', fontFamily: 'monospace',
+    // Card background
+    const bgColor = playable ? colors.bg : 0x2a2a2a;
+    const borderColor = playable ? colors.border : 0x444444;
+
+    // Outer card frame
+    const frame = this.scene.add.rectangle(0, 0, w, h, 0x222222)
+      .setStrokeStyle(2, borderColor);
+    container.add(frame);
+
+    // Inner card bg
+    const inner = this.scene.add.rectangle(0, 0, w - 6, h - 6, bgColor);
+    container.add(inner);
+
+    // Card art area (darker rectangle in upper portion)
+    const artArea = this.scene.add.rectangle(0, -18, w - 14, 55, 0x111111, 0.5)
+      .setStrokeStyle(1, 0x333333);
+    container.add(artArea);
+
+    // Type icon in art area
+    const typeIcons: Record<string, string> = {
+      attack: '\u2694', skill: '\u26E8', power: '\u2B50',
+    };
+    const iconText = this.scene.add.text(0, -20, typeIcons[card.type] ?? '', {
+      fontSize: '24px', color: '#ffffff',
+    }).setOrigin(0.5).setAlpha(0.3);
+    container.add(iconText);
+
+    // Cost orb (top-left)
+    const costOrb = this.scene.add.circle(-w / 2 + 14, -h / 2 + 14, 13,
+      playable ? 0x2255aa : 0x333333)
+      .setStrokeStyle(2, playable ? 0x60a5fa : 0x555555);
+    const costText = this.scene.add.text(-w / 2 + 14, -h / 2 + 14, `${card.cost}`, {
+      fontSize: '14px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
     }).setOrigin(0.5);
-    container.add([costBg, costText]);
+    container.add([costOrb, costText]);
 
-    const nameText = this.scene.add.text(0, -35, card.name, {
-      fontSize: '10px', color: '#ffffff', fontFamily: 'monospace',
-      wordWrap: { width: 90 },
+    // Card name (center, below art)
+    const nameText = this.scene.add.text(0, 15, card.name, {
+      fontSize: '10px', color: '#ffffff', fontFamily: 'monospace', fontStyle: 'bold',
+      wordWrap: { width: w - 16 },
     }).setOrigin(0.5, 0);
     container.add(nameText);
 
-    const descText = this.scene.add.text(0, 0, card.description, {
+    // Description (below name)
+    const descText = this.scene.add.text(0, 32, card.description, {
       fontSize: '8px', color: '#cccccc', fontFamily: 'monospace',
-      wordWrap: { width: 88 },
+      wordWrap: { width: w - 16 },
     }).setOrigin(0.5, 0);
     container.add(descText);
 
+    // Type label (bottom)
+    const typeLabel = this.scene.add.text(0, h / 2 - 12, colors.label, {
+      fontSize: '8px', color: '#999999', fontFamily: 'monospace',
+    }).setOrigin(0.5);
+    container.add(typeLabel);
+
+    // Upgrade indicator
     if (card.upgraded) {
-      const upText = this.scene.add.text(38, -58, '+', {
-        fontSize: '12px', color: '#4ade80', fontFamily: 'monospace',
+      const upText = this.scene.add.text(w / 2 - 10, -h / 2 + 8, '+', {
+        fontSize: '14px', color: '#4ade80', fontFamily: 'monospace', fontStyle: 'bold',
       }).setOrigin(0.5);
       container.add(upText);
     }
 
+    // Interactivity
     if (playable) {
-      bg.setInteractive({ useHandCursor: true });
+      frame.setInteractive({ useHandCursor: true });
       let hovered = false;
-      bg.on('pointerover', () => {
+      const origY = y;
+      const origAngle = angle;
+
+      frame.on('pointerover', () => {
         if (!hovered) {
           hovered = true;
-          container.setScale(1.1);
-          container.y -= 10;
+          container.setScale(1.15);
+          container.y = origY - 30;
+          container.setAngle(0); // straighten on hover
+          container.setDepth(65); // bring to front
         }
       });
-      bg.on('pointerout', () => {
+      frame.on('pointerout', () => {
         if (hovered) {
           hovered = false;
           container.setScale(1.0);
-          container.y += 10;
+          container.y = origY;
+          container.setAngle(origAngle);
+          container.setDepth(60);
         }
       });
-      bg.on('pointerdown', () => {
+      frame.on('pointerdown', () => {
         this.onPlayCard(card.id);
       });
     } else {
-      container.setAlpha(0.5);
+      container.setAlpha(0.45);
     }
 
     return container;

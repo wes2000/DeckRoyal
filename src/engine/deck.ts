@@ -8,11 +8,12 @@ export function createDeck(cardIds: string[]): DeckState {
   return { drawPile: shuffle([...cardIds]), hand: [], discardPile: [] };
 }
 
-export function drawCards(deck: DeckState, count: number): DeckState {
+export function drawCards(deck: DeckState, count: number, maxHandSize = 5): DeckState {
   const drawPile = [...deck.drawPile];
   const hand = [...deck.hand];
   let discardPile = [...deck.discardPile];
   for (let i = 0; i < count; i++) {
+    if (hand.length >= maxHandSize) break;
     if (drawPile.length === 0) {
       if (discardPile.length === 0) break;
       drawPile.push(...shuffle(discardPile));
